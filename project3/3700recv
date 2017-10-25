@@ -52,6 +52,7 @@ class Receiver(object):
       # if nothing is ready, we hit the timeout
       if result:
         (data, addr) = result
+        self.addr = addr
 
         try:
           decoded = json.loads(data)
