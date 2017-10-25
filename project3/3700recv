@@ -11,57 +11,106 @@ import datetime
 import select
 import json
 
-def log(string):
-  sys.stderr.write(datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + string + "\n")
-
 MSG_SIZE = 1500
 TIMEOUT = 30
+SEQUENCE = 0
+
 
 # Bind to localhost and an ephemeral port
 UDP_IP = "127.0.0.1"
 UDP_PORT = 0
 
-# Set up the socket
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) 
-sock.bind((UDP_IP, UDP_PORT))
-sock.settimeout(TIMEOUT)
+def log(string):
+  sys.stderr.write(datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + string + "\n")
 
-# Get port we bound to
-UDP_PORT = sock.getsockname()[1]
-log("[bound] " + str(UDP_PORT))
+class Receiver(object):
 
-# Now listen for packets
-while True:
-  result = sock.recvfrom(MSG_SIZE)
+  def __init__(self):
+    self.expected_next_byte = 0
+    # init to 0 because we will get this from socket.recvfrom
+    self.addr = 0
+    self.sock = self.init_socket()
 
-  # If nothing is ready, we hit the timeout
-  if result:
-    (data, addr) = result
+  def init_socket(self):
+    # set up the socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) 
+    sock.bind((UDP_IP, UDP_PORT))
+    sock.settimeout(TIMEOUT)
 
-    try:
-      decoded = json.loads(data)
+    # get port we bound to
+    UDP_PORT = sock.getsockname()[1]
+    log("[bound] " + str(UDP_PORT))
 
-      # If the EOF flag is set, exit
-      if (decoded['eof']):
-        log("[completed]")
-        sys.exit(0)
+    return sock
 
-      # If there is data, we accept it and print it out
-      if (decoded['data']):
-        # If we receive data, we assume it's in-order
-        # You will need to do much more here
-        log("[recv data] " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) + ") ACCEPTED (in-order)")
-        sys.stdout.write(decoded['data'])
+  # main method to handle receiving
+  def receive(self):
+    # now listen for packets
+    while True:
+      result = sock.recvfrom(MSG_SIZE)
 
-      # Send back an ack to the sender
-      msg = json.dumps({"ack": decoded['sequence'] + len(decoded['data'])})
-      log("ABOUT TO SEND " + msg)
-      if sock.sendto(msg, addr) < len(msg):
-        log("[error] unable to fully send packet")
+      # if nothing is ready, we hit the timeout
+      if result:
+        (data, addr) = result
 
-    except (ValueError, KeyError, TypeError) as e:
-      log("[recv corrupt packet]")
-      raise e
-  else:
-    log("[error] timeout")
-    sys.exit(-1)
+        try:
+          decoded = json.loads(data)
+
+          # if the EOF flag is set, exit
+          if (decoded['eof']):
+            log("[completed]")
+            sys.exit(0)
+
+          # if there is data, we accept it and print it out
+          if (decoded['data']):
+            # If we receive data, we assume it's in-order
+            # You will need to do much more here
+            log("[recv data] " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) + ") ACCEPTED (in-order)")
+            sys.stdout.write(decoded['data'])
+
+          # send back an ack to the sender
+          msg = json.dumps({"ack": decoded['sequence'] + len(decoded['data'])})
+          log("ABOUT TO SEND " + msg)
+          if sock.sendto(msg, addr) < len(msg):
+            log("[error] unable to fully send packet")
+
+        except (ValueError, KeyError, TypeError) as e:
+          log("[recv corrupt packet]")
+          raise e
+      else:
+        log("[error] timeout")
+        sys.exit(-1)
+
+  ## methods for handling received data
+
+  # unpack packet into a usable json form
+  def parse_sender_msg(self, packet):
+    return json.loads(packet)
+
+  # handle the info from the packet
+  def process_packet(self, packet):
+    pass
+
+  # build a checksum from the packet
+  def build_checksum(self, packet):
+    pass
+
+  # check if built checksum matches packet checksum
+  def check_packet_valid(self, packet):
+    pass
+
+  ## methods for responding
+
+  # send an ack to sender
+  def send_ack(self, sequence_num):
+    pass
+
+  # finish when we hit the eof flag
+  def on_finished(self, packet):
+    pass
+
+
+if __name__ == '__main__':
+  # initiate sequence from object
+  receiver = Receiver();
+  receive.receive();

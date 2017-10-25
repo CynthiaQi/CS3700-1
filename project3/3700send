@@ -16,60 +16,146 @@ DATA_SIZE = 1000
 TIMEOUT = 30
 SEQUENCE = 0
 
-# Bind to localhost and an ephemeral port
-IP_PORT = sys.argv[1]
-UDP_IP = IP_PORT[0:IP_PORT.find(":")]
-UDP_PORT = int(IP_PORT[IP_PORT.find(":")+1:])
-dest = (UDP_IP, UDP_PORT)
-
-# Set up the socket
-sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) 
-sock.settimeout(TIMEOUT)
-
 def log(string):
   sys.stderr.write(datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + string + "\n")
 
-def send_next_packet():
-  global SEQUENCE
+class Sender(object):
 
-  data = sys.stdin.read(DATA_SIZE)
-  if (len(data) > 0):
-    msg = json.dumps({"sequence": SEQUENCE, "data": data, "ack": False, "eof": False})
-    SEQUENCE += len(data)
+  # init methods
+  def __init__(self, data, dest):
+    # data dependent
+    self.data = data
+    self.sent_data_dict = self.init_sent_data_dict()
+    self.acked_data_dict = self.init_acked_data_dict()
 
-    if sock.sendto(msg, dest) < len(msg):
-      log("[error] unable to fully send packet")
+    # initialized vars 
+    self.cong_wind = 1
+    self.add_incr = 0
+    self.round_trip_time = 0.5
+    self.slow_start_thresh = 50
+    self.last_sent_byte = 0
+
+    # blank counters
+    self.packet_timers = {}
+    self.dup_ack_counters = {}
+
+    self.dest = dest
+    self.sock = self.init_socket()
+
+  # set up the socket
+  def init_socket(self):
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) 
+    sock.settimeout(TIMEOUT)
+
+    return sock
+    
+  def init_acked_data_dict(self):
+    pass
+
+  def init_sent_data_dict(self):
+
+  # main method for handling program
+  def send():
+    # Send first packet
+    send_next_packet()
+
+    # Now read in data, send packets
+    while True:
+      log("ABOUT TO SLEEP")
+      result = sock.recvfrom(MSG_SIZE)
+
+      if result:
+        (data, addr) = result
+        try:
+          decoded = json.loads(data)
+
+          # If there is an ack, send next packet
+          if decoded['ack'] == SEQUENCE:
+            log("[recv ack] " + str(SEQUENCE))
+
+            # Try to send next packet; break if no more data
+            if (not send_next_packet()):
+              break
+        except (ValueError, KeyError, TypeError):
+          log("[recv corrupt packet]")
+      else:
+        log("[error] timeout")
+        sys.exit(-1)
+
+    sock.sendto(json.dumps({"eof": True, "data": "", "sequence": SEQUENCE, "ack": False}), dest)
+    sys.exit(0)
+
+  ## methods for sending data    
+
+  # build a checksum from the data
+  def build_checksum(self, data):
+    pass
+
+  # return effective window
+  def get_effective_wind(self):
+    pass
+
+  # calc congestion window after a timeout
+  def calc_cong_wind_timeout(self):
+    pass
+
+  # calc congestion window after duplicate acks are recieved
+  def calc_cong_wind_dup_acks(self):
+    pass
+
+  # calc congestion window after an ack is received
+  def calc_cong_wind_ack(self):
+    pass
+
+  # transmits packet with sequence number, sequence_num
+  def transmit_packet(self, sequence_num):
+    global SEQUENCE
+
+    data = sys.stdin.read(DATA_SIZE)
+    if (len(data) > 0):
+      msg = json.dumps({"sequence": SEQUENCE, "data": data, "ack": False, "eof": False, "checksum" : null})
+      SEQUENCE += len(data)
+
+      if sock.sendto(msg, dest) < len(msg):
+        log("[error] unable to fully send packet")
+      else:
+        log("[send data] " + str(SEQUENCE) + " (" + str(len(data)) + ")")
+      return True
     else:
-      log("[send data] " + str(SEQUENCE) + " (" + str(len(data)) + ")")
-    return True
-  else:
-    return False
+      return False
 
-# Send first packet
-send_next_packet()
+  # send packets from the effective window that haven't been transmitted
+  def send_new_packets(self):
+    pass
 
-# Now read in data, send packets
-while True:
-  log("ABOUT TO SLEEP")
-  result = sock.recvfrom(MSG_SIZE)
+  # retransmits unacked packet with sequence number, sequence_num 
+  def retransmit_packet(self, sequence_num):
+    pass
 
-  if result:
-    (data, addr) = result
-    try:
-      decoded = json.loads(data)
+  ## methods for processing acks
 
-      # If there is an ack, send next packet
-      if decoded['ack'] == SEQUENCE:
-        log("[recv ack] " + str(SEQUENCE))
+  # decode message from receiver into a usable json form
+  def parse_receiver_msg(self, data):
+    return json.loads(data)
 
-        # Try to send next packet; break if no more data
-        if (not send_next_packet()):
-          break
-    except (ValueError, KeyError, TypeError):
-      log("[recv corrupt packet]")
-  else:
-    log("[error] timeout")
-    sys.exit(-1)
+  # handle information from ack
+  def process_ack(self, data):
+    pass
 
-sock.sendto(json.dumps({"eof": True, "data": "", "sequence": SEQUENCE, "ack": False}), dest)
-sys.exit(0)
+  # handle a duplicate ack
+  def handle_dup_ack(self, data):
+    pass
+
+
+if __name__ == '__main__':
+  # bind to localhost and an ephemeral port
+  IP_PORT = sys.argv[1]
+  UDP_IP = IP_PORT[0:IP_PORT.find(":")]
+  UDP_PORT = int(IP_PORT[IP_PORT.find(":")+1:])
+  dest = (UDP_IP, UDP_PORT)
+
+  # read in all data
+  data = sys.stdin.read()
+
+  sender = Sender(data, dest)
+  sender.send()
