@@ -38,54 +38,11 @@ class Receiver(object):
 
 	# main method to handle receiving
 	def receive(self):
-		# now listen for packets
+		# listen for packets
 		while True:
-			# if nothing is ready, we hit the timeout
 			try:
-				result = self.sock.recvfrom(MSG_SIZE)
-				(data, self.addr) = result
-
-				try:
-					decoded = self.parse_sender_msg(data)
-					# if the EOF flag is set, exit
-					if (decoded['eof']):
-						log("[Recieved EOF]: Stopping...")
-						break
-
-					# send back an ack to the sender
-					msg = json.dumps({"ack": decoded['sequence']})
-			
-					# If the packet is in expected order or duplicated, attempt to send an ack
-					if self.current_sequence_num >= decoded['sequence']:
-						# if there is data, we accept it and print it out
-						if (decoded['data']):
-							if self.current_sequence_num == decoded['sequence']:
-								# If the packet is in expected order, print out the data
-								log("[Accept Data]: " + str(decoded['sequence']) +
-									" (" + str(len(decoded['data'])) + ") (in-order)")
-								sys.stdout.write(decoded['data'])
-								self.current_sequence_num += len(decoded['data'])
-							elif self.current_sequence_num > decoded['sequence']:
-								# If the packet is duplicated, don't keep the data
-								log("[Resend ACK]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) +
-									"). Expected " + str(self.current_sequence_num))
-								
-						# Send an ACK
-						if self.sock.sendto(msg, self.addr) < len(msg):
-							# The ACK failed to send
-							log("[Error]: Unable to fully send packet")
-						else:
-							# The ACK sent
-							log("[Sent ACK]: " + msg)
-					else:
-						# Drop the out of order packet
-						log("[Reject Data]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) +
-							") (out-of-order). Expected " + str(self.current_sequence_num))
-
-				except (ValueError, KeyError, TypeError) as e:
-					log("[Error]: Received corrupt packet")
-					raise e
-
+				(data, self.addr) = self.sock.recvfrom(MSG_SIZE)
+				self.process_packet(data)
 			except socket.timeout:
 				log("[Error]: Socket timeout")
 
@@ -96,8 +53,42 @@ class Receiver(object):
 		return json.loads(packet)
 
 	# handle the info from the packet
-	def process_packet(self, packet):
-		pass
+	def process_packet(self, data):
+		try:
+			decoded = self.parse_sender_msg(data)
+			# if the EOF flag is set, exit
+			if (decoded['eof']):
+				self.on_finished()
+
+			# If the packet is in expected order or duplicated, attempt to send an ack
+			if self.current_sequence_num >= decoded['sequence']:
+
+				# Check that there is data. If so, regardless of the sequence number we will ack
+				if (decoded['data']):
+
+					if self.current_sequence_num == decoded['sequence']:
+						# If the packet is in expected order, print out the data
+						log("[Accept Data]: " + str(decoded['sequence']) +
+							" (" + str(len(decoded['data'])) + ") (in-order)")
+						sys.stdout.write(decoded['data'])
+						# Increment the expected sequence number
+						self.current_sequence_num += len(decoded['data'])
+
+					elif self.current_sequence_num > decoded['sequence']:
+						# If the packet is duplicated, don't keep the data
+						log("[Resend ACK]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) +
+							"). Expected " + str(self.current_sequence_num))
+					
+					# Send an ACK regardless of sequence number
+					self.send_ack(decoded['sequence'])		
+			else:
+				# Drop the out of order packet
+				log("[Reject Data]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) +
+					") (out-of-order). Expected " + str(self.current_sequence_num))
+
+		except (ValueError, KeyError, TypeError) as e:
+			log("[Error]: Received corrupt packet")
+			raise e
 
 	# build a checksum from the data
 	def build_checksum(self, data):
@@ -112,11 +103,20 @@ class Receiver(object):
 
 	# send an ack to sender
 	def send_ack(self, sequence_num):
-		pass
+		# Create the ACK
+		msg = json.dumps({"ack": sequence_num})
+		# Send the ACK
+		if self.sock.sendto(msg, self.addr) < len(msg):
+			# The ACK failed to send
+			log("[Error]: Unable to fully send packet")
+		else:
+			# The ACK sent
+			log("[Sent ACK]: " + msg)
 
 	# finish when we hit the eof flag
-	def on_finished(self, packet):
-		pass
+	def on_finished(self):
+		log("[Recieved EOF]: Stopping...")
+		sys.exit(0)
 
 
 if __name__ == '__main__':
