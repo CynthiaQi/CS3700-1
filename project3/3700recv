@@ -16,7 +16,6 @@ def log(string):
   sys.stderr.write(datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + string + "\n")
 
 class Receiver(object):
-
 	def __init__(self):
 		self.expected_next_byte = 0
 		# init to 0 because we will get this from socket.recvfrom
@@ -44,10 +43,10 @@ class Receiver(object):
 			# if nothing is ready, we hit the timeout
 			try:
 				result = self.sock.recvfrom(MSG_SIZE)
-				(data, addr) = result
-				self.addr = addr
+				(data, self.addr) = result
+
 				try:
-					decoded = json.loads(data)
+					decoded = self.parse_sender_msg(data)
 					# if the EOF flag is set, exit
 					if (decoded['eof']):
 						log("[Recieved EOF]: Stopping...")
@@ -70,7 +69,7 @@ class Receiver(object):
 								log("[Resend ACK]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) + "). Expected " + str(self.current_sequence_num))
 								
 						# Send an ACK
-						if self.sock.sendto(msg, addr) < len(msg):
+						if self.sock.sendto(msg, self.addr) < len(msg):
 							# The ACK failed to send
 							log("[Error]: Unable to fully send packet")
 						else:

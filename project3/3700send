@@ -16,7 +16,6 @@ def log(string):
   sys.stderr.write(datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + string + "\n")
 
 class Sender(object):
-
 	# init methods
 	def __init__(self, dest):
 		# data dependent
@@ -61,7 +60,7 @@ class Sender(object):
 				result = self.sock.recvfrom(MSG_SIZE)
 				(data, addr) = result
 				try:
-					decoded = json.loads(data)
+					decoded = self.parse_receiver_msg(data)
 
 					# If there is an ack, send next packet
 					if decoded['ack'] == SEQUENCE:
@@ -84,7 +83,7 @@ class Sender(object):
 	def transmit_eof(self):
 		# Send several times to make sure it gets through
 		for x in xrange(0, 5):
-			self.sock.sendto(json.dumps({"eof": True, "data": "", "sequence": SEQUENCE, "ack": False, "checksum" : ""}), dest)
+			self.sock.sendto(json.dumps({"eof": True, "data": "", "sequence": SEQUENCE, "ack": False, "checksum" : ""}), self.dest)
 		log("[Sent EOF]: Stopping...")
 
 	## methods for sending data    
@@ -118,8 +117,8 @@ class Sender(object):
 		if (len(data) > 0):
 			msg = json.dumps({"sequence": SEQUENCE, "data": data, "ack": False, "eof": False, "checksum" : ""})
 
-			if self.sock.sendto(msg, dest) < len(msg):
-				log("[Error]: Unable to fully send d")
+			if self.sock.sendto(msg, self.dest) < len(msg):
+				log("[Error]: Unable to fully send data")
 			else:
 				log("[Send Data]: " + str(SEQUENCE) + " (" + str(len(data)) + ")")
 
@@ -136,7 +135,7 @@ class Sender(object):
 	# retransmits unacked packet
 	def retransmit_packet(self):
 		msg = self.sent_data_dict[str(SEQUENCE)]
-		if self.sock.sendto(msg, dest) < len(msg):
+		if self.sock.sendto(msg, self.dest) < len(msg):
 			log("[Error]: Unable to fully resend packet")
 		else:
 			log("[Resend Data]: " + str(SEQUENCE))
