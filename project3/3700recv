@@ -61,12 +61,14 @@ class Receiver(object):
 						if (decoded['data']):
 							if self.current_sequence_num == decoded['sequence']:
 								# If the packet is in expected order, print out the data
-								log("[Accept Data]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) + ") (in-order)")
+								log("[Accept Data]: " + str(decoded['sequence']) +
+									" (" + str(len(decoded['data'])) + ") (in-order)")
 								sys.stdout.write(decoded['data'])
 								self.current_sequence_num += len(decoded['data'])
 							elif self.current_sequence_num > decoded['sequence']:
 								# If the packet is duplicated, don't keep the data
-								log("[Resend ACK]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) + "). Expected " + str(self.current_sequence_num))
+								log("[Resend ACK]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) +
+									"). Expected " + str(self.current_sequence_num))
 								
 						# Send an ACK
 						if self.sock.sendto(msg, self.addr) < len(msg):
@@ -77,7 +79,8 @@ class Receiver(object):
 							log("[Sent ACK]: " + msg)
 					else:
 						# Drop the out of order packet
-						log("[Reject Data]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) + ") (out-of-order). Expected " + str(self.current_sequence_num))
+						log("[Reject Data]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) +
+							") (out-of-order). Expected " + str(self.current_sequence_num))
 
 				except (ValueError, KeyError, TypeError) as e:
 					log("[Error]: Received corrupt packet")

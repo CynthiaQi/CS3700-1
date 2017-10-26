@@ -22,11 +22,11 @@ class Sender(object):
 		self.sent_data_dict = dict()
 		self.acked_data_dict = dict()
 
-		# initialized vars 
-		self.cong_wind = 1
+		self.cong_wind = 1  # cwnd
+		self.slow_start_thresh = 10000  # ssthresh
+
 		self.add_incr = 0
 		self.round_trip_time = 0.5
-		self.slow_start_thresh = 50
 		self.last_sent_byte = 0
 
 		# blank counters
@@ -41,12 +41,6 @@ class Sender(object):
 		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) 
 		sock.settimeout(TIMEOUT)
 		return sock
-		
-	def init_acked_data_dict(self):
-		pass
-
-	def init_sent_data_dict(self):
-		pass
 
 	# main method for handling program
 	def send(self):
@@ -57,22 +51,11 @@ class Sender(object):
 		# Now read in data, send packets
 		while True:
 			try:
-				result = self.sock.recvfrom(MSG_SIZE)
-				(data, addr) = result
-				try:
-					decoded = self.parse_receiver_msg(data)
-
-					# If there is an ack, send next packet
-					if decoded['ack'] == SEQUENCE:
-						log("[Recv ACK]: " + str(SEQUENCE))
-						# Increment the sequence number to expect the next packet
-						SEQUENCE += DATA_SIZE
-
-						# Try to send next packet; break if no more data
-						if (not self.transmit_packet()):
-							break
-				except (ValueError, KeyError, TypeError):
-					log("[Error]: Received corrupt packet")
+				# Process any ACKs we receive
+				(data, addr) = self.sock.recvfrom(MSG_SIZE)
+				if (not self.process_ack(data)):
+					# Determine whether to break the loop
+					break
 			except socket.timeout:
 				log("[Error]: Socket timeout")
 				self.retransmit_packet()
@@ -115,8 +98,8 @@ class Sender(object):
 		data = sys.stdin.read(DATA_SIZE)
 
 		if (len(data) > 0):
+			# Attempt to send the next packet
 			msg = json.dumps({"sequence": SEQUENCE, "data": data, "ack": False, "eof": False, "checksum" : ""})
-
 			if self.sock.sendto(msg, self.dest) < len(msg):
 				log("[Error]: Unable to fully send data")
 			else:
@@ -148,7 +131,23 @@ class Sender(object):
 
 	# handle information from ack
 	def process_ack(self, data):
-		pass
+		global SEQUENCE
+		try:
+			decoded = self.parse_receiver_msg(data)
+			# If we got the expected ACK, send the next packet
+			if decoded['ack'] == SEQUENCE:
+				log("[Recv ACK]: " + str(SEQUENCE))
+				# Add ACKed packet to acked_data_dict
+				self.acked_data_dict[str(SEQUENCE)] = self.sent_data_dict[str(SEQUENCE)]
+				# Increment the sequence number to expect the next packet
+				SEQUENCE += DATA_SIZE
+				# Transmit next packet
+				# (Returning this allows us to determine whether to break the main loop)
+				return self.transmit_packet()
+		except (ValueError, KeyError, TypeError):
+			log("[Error]: Received corrupt packet")
+		# By default, do not break the main loop
+		return True
 
 	# handle a duplicate ack
 	def handle_dup_ack(self, data):
