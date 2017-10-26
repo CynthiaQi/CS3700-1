@@ -44,7 +44,6 @@ class Sender(object):
 
 	# main method for handling program
 	def send(self):
-		global SEQUENCE
 		# Send first packet
 		self.transmit_packet()
 
