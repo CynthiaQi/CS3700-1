@@ -22,8 +22,8 @@ class Sender(object):
 		self.sent_data_dict = dict()
 		self.acked_data_dict = dict()
 
-		self.cong_wind = 1  # cwnd
-		self.slow_start_thresh = 10000  # ssthresh
+		self.cwnd = 1
+		self.ssthresh = 10000
 
 		self.add_incr = 0
 		self.round_trip_time = 0.5
@@ -57,6 +57,9 @@ class Sender(object):
 					break
 			except socket.timeout:
 				log("[Error]: Socket timeout")
+				# Calculate new congestion window
+				self.calc_cong_wind_timeout()
+				# Retransmit the originally sent packet
 				self.retransmit_packet()
 
 		self.transmit_eof()
@@ -81,7 +84,9 @@ class Sender(object):
 
 	# calc congestion window after a timeout
 	def calc_cong_wind_timeout(self):
-		pass
+		# Multiplicative decrease
+		self.ssthresh = self.cwnd / 2
+		self.cwnd = 1
 
 	# calc congestion window after duplicate acks are recieved
 	def calc_cong_wind_dup_acks(self):
@@ -89,7 +94,12 @@ class Sender(object):
 
 	# calc congestion window after an ack is received
 	def calc_cong_wind_ack(self):
-		pass
+		if self.cwnd < self.ssthresh:
+			# Slow start
+			self.cwnd += 1
+		else:
+			# Congestion avoidance
+			self.cwnd += 1 / self.cwnd
 
 	# transmits packet
 	def transmit_packet(self):
@@ -140,6 +150,8 @@ class Sender(object):
 				self.acked_data_dict[str(SEQUENCE)] = self.sent_data_dict[str(SEQUENCE)]
 				# Increment the sequence number to expect the next packet
 				SEQUENCE += DATA_SIZE
+				# Calculate the new congestion window
+				self.calc_cong_wind_ack()
 				# Transmit next packet
 				# (Returning this allows us to determine whether to break the main loop)
 				return self.transmit_packet()
