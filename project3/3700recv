@@ -21,7 +21,8 @@ class Receiver(object):
     self.addr = 0
     self.current_sequence_num = 0
     self.sock = self.init_socket()
-    self.acked_data_dict = dict()
+    #self.acked_data_dict = dict()
+    self.packet_buffer = dict()
 
   def init_socket(self):
     global UDP_PORT
