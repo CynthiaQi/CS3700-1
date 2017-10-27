@@ -74,8 +74,7 @@ class Receiver(object):
             ") (in-order)")
 
           # iterate through buffer to process all in order buffered packets 
-          while (self.current_sequence_num in self.packet_buffer) and 
-            (self.packet_buffer[self.current_sequence_num]['in_buffer']):
+          while (self.current_sequence_num in self.packet_buffer) and (self.packet_buffer[self.current_sequence_num]['in_buffer']):
 
             # print data for each in order packet
             sys.stdout.write(packet_buffer[self.current_sequence_num]['data'])
