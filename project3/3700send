@@ -29,10 +29,6 @@ class Sender(object):
 		self.round_trip_time = 0.5
 		self.last_sent_byte = 0
 
-		# blank counters
-		#self.packet_timers = dict()
-		#self.dup_ack_counters = dict()
-
 		self.dest = dest
 		self.sock = self.init_socket()
 
@@ -78,14 +74,10 @@ class Sender(object):
 		data_string = ''.join([`x` for x in data])
 		return hashlib.md5(data_string).hexdigest()
 
-	# return effective window
-	def get_effective_wind(self):
-		pass
-
 	# calc congestion window after a timeout
 	def calc_cong_wind_timeout(self):
 		# Multiplicative decrease
-		self.ssthresh = self.cwnd / 2.0
+		self.ssthresh = max(self.cwnd / 2.0, 2)
 		self.cwnd = 1.0
 		log("[Sliding Window Timeout]: cwnd: " + str(self.cwnd) + " ssthresh: " + str(self.ssthresh))
 
@@ -126,10 +118,6 @@ class Sender(object):
 				return len(self.sent_data_dict) != 0
 		# Continue the main loop by default
 		return True
-
-	# send packets from the effective window that haven't been transmitted
-	def send_new_packets(self):
-		pass
 
 	# retransmits unacked packet
 	def retransmit_packet(self):
@@ -187,7 +175,7 @@ if __name__ == '__main__':
 	dest = (UDP_IP, UDP_PORT)
 	MSG_SIZE = 1500
 	DATA_SIZE = 1000
-	TIMEOUT = 0.2
+	TIMEOUT = 0.5
 	SEQUENCE = 0
 
 	sender = Sender(dest)
