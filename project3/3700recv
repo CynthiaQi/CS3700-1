@@ -16,47 +16,46 @@ def log(string):
   sys.stderr.write(datetime.datetime.now().strftime("%H:%M:%S.%f") + " " + string + "\n")
 
 class Receiver(object):
-	def __init__(self):
-		# init to 0 because we will get this from socket.recvfrom
-		self.addr = 0
-		self.current_sequence_num = 0
-		self.sock = self.init_socket()
+  def __init__(self):
+    # init to 0 because we will get this from socket.recvfrom
+    self.addr = 0
+    self.current_sequence_num = 0
+    self.sock = self.init_socket()
+    self.acked_data_dict = dict()
 
-    self.packet_buffer = dict()
+  def init_socket(self):
+    global UDP_PORT
+    # set up the socket
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) 
+    sock.bind((UDP_IP, UDP_PORT))
+    sock.settimeout(TIMEOUT)
 
-	def init_socket(self):
-		global UDP_PORT
-		# set up the socket
-		sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM) 
-		sock.bind((UDP_IP, UDP_PORT))
-		sock.settimeout(TIMEOUT)
+    # get port we bound to
+    UDP_PORT = sock.getsockname()[1]
+    # Don't change this log message at all, it breaks the run script
+    log("[bound] " + str(UDP_PORT))
+    return sock
 
-		# get port we bound to
-		UDP_PORT = sock.getsockname()[1]
-		# Don't change this log message at all, it breaks the run script
-		log("[bound] " + str(UDP_PORT))
-		return sock
+  # main method to handle receiving
+  def receive(self):
+    # listen for packets
+    while True:
+      try:
+        (data, self.addr) = self.sock.recvfrom(MSG_SIZE)
+        self.process_packet(data)
+      except socket.timeout:
+        log("[Error]: Socket timeout")
 
-	# main method to handle receiving
-	def receive(self):
-		# listen for packets
-		while True:
-			try:
-				(data, self.addr) = self.sock.recvfrom(MSG_SIZE)
-				self.process_packet(data)
-			except socket.timeout:
-				log("[Error]: Socket timeout")
+  ## methods for handling received data
 
-	## methods for handling received data
+  # unpack packet into a usable json form
+  def parse_sender_msg(self, packet):
+    return json.loads(packet)
 
-	# unpack packet into a usable json form
-	def parse_sender_msg(self, packet):
-		return json.loads(packet)
-
-	# handle the info from the packet
-	def process_packet(self, data):
-		try:
-			decoded = self.parse_sender_msg(data)
+  # handle the info from the packet
+  def process_packet(self, data):
+    try:
+      decoded = self.parse_sender_msg(data)
 
       # add packet to buffer
       if (decoded['sequence'] not in self.packet_buffer):
@@ -91,46 +90,46 @@ class Receiver(object):
         # Send an ACK regardless of sequence number
         self.send_ack(decoded['sequence'])  
 
-		except (ValueError, KeyError, TypeError) as e:
-			log("[Error]: Received corrupt packet")
-			raise e
+    except (ValueError, KeyError, TypeError) as e:
+      log("[Error]: Received corrupt packet")
+      raise e
 
-	# TODO build a checksum from the data
-	def build_checksum(self, data):
-		data_string = ''.join([`x` for x in data])
-		return hashlib.md5(data_string).hexdigest()
+  # TODO build a checksum from the data
+  def build_checksum(self, data):
+    data_string = ''.join([`x` for x in data])
+    return hashlib.md5(data_string).hexdigest()
 
-	# TODO check if built checksum matches packet checksum
-	def check_packet_valid(self, packet):
-		pass
+  # TODO check if built checksum matches packet checksum
+  def check_packet_valid(self, packet):
+    pass
 
-	## methods for responding
+  ## methods for responding
 
-	# send an ack to sender
-	def send_ack(self, sequence_num):
-		# Create the ACK
-		msg = json.dumps({"ack": sequence_num})
-		# Send the ACK
-		if self.sock.sendto(msg, self.addr) < len(msg):
-			# The ACK failed to send
-			log("[Error]: Unable to fully send packet")
-		else:
-			# The ACK sent
-			log("[Sent ACK]: " + msg)
+  # send an ack to sender
+  def send_ack(self, sequence_num):
+    # Create the ACK
+    msg = json.dumps({"ack": sequence_num})
+    # Send the ACK
+    if self.sock.sendto(msg, self.addr) < len(msg):
+      # The ACK failed to send
+      log("[Error]: Unable to fully send packet")
+    else:
+      # The ACK sent
+      log("[Sent ACK]: " + msg)
 
-	# finish when we hit the eof flag
-	def on_finished(self):
-		log("[Recieved EOF]: Stopping...")
-		sys.exit(0)
+  # finish when we hit the eof flag
+  def on_finished(self):
+    log("[Recieved EOF]: Stopping...")
+    sys.exit(0)
 
 
 if __name__ == '__main__':
-	MSG_SIZE = 1500
-	TIMEOUT = .2
-	SEQUENCE = 0
-	# Bind to localhost and an ephemeral port
-	UDP_IP = "127.0.0.1"
-	UDP_PORT = 0
-	# initiate sequence from object
-	receiver = Receiver();
-	receiver.receive();
+  MSG_SIZE = 1500
+  TIMEOUT = .2
+  SEQUENCE = 0
+  # Bind to localhost and an ephemeral port
+  UDP_IP = "127.0.0.1"
+  UDP_PORT = 0
+  # initiate sequence from object
+  receiver = Receiver();
+  receiver.receive();
