@@ -58,39 +58,43 @@ class Receiver(object):
     try:
       decoded = self.parse_sender_msg(data)
 
-      # add packet to buffer
-      if (decoded['sequence'] not in self.packet_buffer):
-        self.packet_buffer[decoded['sequence']] = {'packet_data': '', 
-                                                   'in_buffer': False,
-                                                   'eof': False}
+      if (self.check_packet_valid(decoded)) 
+        # add packet to buffer
+        if (decoded['sequence'] not in self.packet_buffer):
+          self.packet_buffer[decoded['sequence']] = {'packet_data': '', 
+                                                     'in_buffer': False,
+                                                     'eof': False}
 
-      if not self.packet_buffer[decoded['sequence']]['in_buffer']:
-        self.packet_buffer[decoded['sequence']]['in_buffer'] = True
-        self.packet_buffer[decoded['sequence']]['eof'] = decoded['eof']
-        self.packet_buffer[decoded['sequence']]['data'] = decoded['data']
+        if not self.packet_buffer[decoded['sequence']]['in_buffer']:
+          self.packet_buffer[decoded['sequence']]['in_buffer'] = True
+          self.packet_buffer[decoded['sequence']]['eof'] = decoded['eof']
+          self.packet_buffer[decoded['sequence']]['data'] = decoded['data']
 
-        if (decoded['sequence'] != self.current_sequence_num):
-          log("[Accept Data]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) +
-            ") (out-of-order)")
-        else:
-          log("[Accept Data]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) + 
-            ") (in-order)")
+          if (decoded['sequence'] != self.current_sequence_num):
+            log("[Accept Data]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) +
+              ") (out-of-order)")
+          else:
+            log("[Accept Data]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) + 
+              ") (in-order)")
 
-          # iterate through buffer to process all in order buffered packets 
-          while (self.current_sequence_num in self.packet_buffer) and (self.packet_buffer[self.current_sequence_num]['in_buffer']):
+            # iterate through buffer to process all in order buffered packets 
+            while (self.current_sequence_num in self.packet_buffer) and (self.packet_buffer[self.current_sequence_num]['in_buffer']):
 
-            # print data for each in order packet
-            sys.stdout.write(self.packet_buffer[self.current_sequence_num]['data'])
+              # print data for each in order packet
+              sys.stdout.write(self.packet_buffer[self.current_sequence_num]['data'])
 
-            # if the EOF flag is set, exit
-            if (self.packet_buffer[self.current_sequence_num]['eof']):
-              self.on_finished()
-            else:
-              # increment expected sequence number
-              self.current_sequence_num += len(self.packet_buffer[self.current_sequence_num]['data'])
-
-      # Send an ACK regardless of sequence number
-      self.send_ack(decoded['sequence'])  
+              # if the EOF flag is set, exit
+              if (self.packet_buffer[self.current_sequence_num]['eof']):
+                self.on_finished()
+              else:
+                # increment expected sequence number
+                self.current_sequence_num += len(self.packet_buffer[self.current_sequence_num]['data'])
+        
+        # Send an ACK regardless of sequence number
+        self.send_ack(decoded['sequence']) 
+        
+      else:
+        log("[Error]: Received corrupt packet")
 
     except (ValueError, KeyError, TypeError) as e:
       log("[Error]: Received corrupt packet")
@@ -103,7 +107,7 @@ class Receiver(object):
 
   # TODO check if built checksum matches packet checksum
   def check_packet_valid(self, packet):
-    pass
+    return packet['checksum'] == build_checksum(packet['data'])
 
   ## methods for responding
 
@@ -127,7 +131,7 @@ class Receiver(object):
 
 if __name__ == '__main__':
   MSG_SIZE = 1500
-  TIMEOUT = .5
+  TIMEOUT = 1
   SEQUENCE = 0
   # Bind to localhost and an ephemeral port
   UDP_IP = "127.0.0.1"

@@ -81,9 +81,9 @@ class Sender(object):
 		self.cwnd = 1.0
 		log("[Sliding Window Timeout]: cwnd: " + str(self.cwnd) + " ssthresh: " + str(self.ssthresh))
 
-	# calc congestion window after duplicate acks are recieved
+	# calc congestion window after 3 duplicate acks are recieved
 	def calc_cong_wind_dup_acks(self):
-		pass
+		self.cwnd
 
 	# calc congestion window after an ack is received
 	def calc_cong_wind_ack(self):
@@ -105,7 +105,8 @@ class Sender(object):
 
 			if (len(data) > 0):
 				# Attempt to send the next packet
-				msg = json.dumps({"sequence": sequence_num, "data": data, "ack": False, "eof": False, "checksum" : ""})
+        checksum = self.build_checksum(data)
+				msg = json.dumps({"sequence": sequence_num, "data": data, "ack": False, "eof": False, "checksum" : checksum})
 				if self.sock.sendto(msg, self.dest) < len(msg):
 					log("[Error]: Unable to fully send data")
 				else:
@@ -175,7 +176,7 @@ if __name__ == '__main__':
 	dest = (UDP_IP, UDP_PORT)
 	MSG_SIZE = 1500
 	DATA_SIZE = 1000
-	TIMEOUT = 0.5
+	TIMEOUT = 1
 	SEQUENCE = 0
 
 	sender = Sender(dest)
