@@ -61,8 +61,8 @@ class Receiver(object):
       # add packet to buffer
       if (decoded['sequence'] not in self.packet_buffer):
         self.packet_buffer[decoded['sequence']] = {'packet_data': '', 
-                                                   'in_buffer' : False,
-                                                   'eof' : ''}
+                                                   'in_buffer': False,
+                                                   'eof': False}
 
       if not self.packet_buffer[decoded['sequence']]['in_buffer']:
         self.packet_buffer[decoded['sequence']]['in_buffer'] = True
@@ -80,14 +80,14 @@ class Receiver(object):
           while (self.current_sequence_num in self.packet_buffer) and (self.packet_buffer[self.current_sequence_num]['in_buffer']):
 
             # print data for each in order packet
-            sys.stdout.write(packet_buffer[self.current_sequence_num]['data'])
+            sys.stdout.write(self.packet_buffer[self.current_sequence_num]['data'])
 
             # if the EOF flag is set, exit
             if (self.packet_buffer[self.current_sequence_num]['eof']):
               self.on_finished()
             else:
               # increment expected sequence number
-              self.current_sequence_num += len(packet_buffer[self.current_sequence_num]['data'])
+              self.current_sequence_num += len(self.packet_buffer[self.current_sequence_num]['data'])
 
         # Send an ACK regardless of sequence number
         self.send_ack(decoded['sequence'])  
