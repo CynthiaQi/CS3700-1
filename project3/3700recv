@@ -17,11 +17,12 @@ def log(string):
 
 class Receiver(object):
 	def __init__(self):
-		self.expected_next_byte = 0
 		# init to 0 because we will get this from socket.recvfrom
 		self.addr = 0
 		self.current_sequence_num = 0
 		self.sock = self.init_socket()
+
+    self.packet_buffer = dict()
 
 	def init_socket(self):
 		global UDP_PORT
@@ -56,46 +57,50 @@ class Receiver(object):
 	def process_packet(self, data):
 		try:
 			decoded = self.parse_sender_msg(data)
-			# if the EOF flag is set, exit
-			if (decoded['eof']):
-				self.on_finished()
 
-			# If the packet is in expected order or duplicated, attempt to send an ack
-			if self.current_sequence_num >= decoded['sequence']:
+      # add packet to buffer
+      if (decoded['sequence'] not in self.packet_buffer):
+        self.packet_buffer[decoded['sequence']] = {'packet_data': decoded['data'], 
+                                                   'in_buffer' : False,
+                                                   'eof' : decoded['eof']}
 
-				# Check that there is data. If so, regardless of the sequence number we will ack
-				if (decoded['data']):
+      if not self.packet_buffer[decoded['sequence']]['in_buffer']:
+        self.packet_buffer[decoded['sequence']]['in_buffer'] = True
 
-					if self.current_sequence_num == decoded['sequence']:
-						# If the packet is in expected order, print out the data
-						log("[Accept Data]: " + str(decoded['sequence']) +
-							" (" + str(len(decoded['data'])) + ") (in-order)")
-						sys.stdout.write(decoded['data'])
-						# Increment the expected sequence number
-						self.current_sequence_num += len(decoded['data'])
+        if (decoded['sequence'] != self.current_sequence_num):
+          log("[Accept Data]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) +
+            ") (out-of-order)."))
+        else:
+          log("[Accept Data]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) + 
+            ") (in-order)")
 
-					elif self.current_sequence_num > decoded['sequence']:
-						# If the packet is duplicated, don't keep the data
-						log("[Resend ACK]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) +
-							"). Expected " + str(self.current_sequence_num))
-					
-					# Send an ACK regardless of sequence number
-					self.send_ack(decoded['sequence'])		
-			else:
-				# Drop the out of order packet
-				log("[Reject Data]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) +
-					") (out-of-order). Expected " + str(self.current_sequence_num))
+          # iterate through buffer to process all in order buffered packets 
+          while (self.current_sequence_num in self.packet_buffer) and 
+            (self.packet_buffer[self.current_sequence_num]['in_buffer']):
+
+            # print data for each in order packet
+            sys.stdout.write(packet_buffer[self.current_sequence_num]['data'])
+
+            # if the EOF flag is set, exit
+            if (self.packet_buffer[self.current_sequence_num]['eof']):
+              self.on_finished()
+            else:
+              # increment expected sequence number
+              self.current_sequence_num += len(packet_buffer[self.current_sequence_num]['data'])
+
+        # Send an ACK regardless of sequence number
+        self.send_ack(decoded['sequence'])  
 
 		except (ValueError, KeyError, TypeError) as e:
 			log("[Error]: Received corrupt packet")
 			raise e
 
-	# build a checksum from the data
+	# TODO build a checksum from the data
 	def build_checksum(self, data):
 		data_string = ''.join([`x` for x in data])
 		return hashlib.md5(data_string).hexdigest()
 
-	# check if built checksum matches packet checksum
+	# TODO check if built checksum matches packet checksum
 	def check_packet_valid(self, packet):
 		pass
 
