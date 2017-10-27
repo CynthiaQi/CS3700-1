@@ -60,14 +60,14 @@ class Receiver(object):
 
       # add packet to buffer
       if (decoded['sequence'] not in self.packet_buffer):
-        self.packet_buffer[decoded['sequence']] = {'packet_data': decoded['data'], 
+        self.packet_buffer[decoded['sequence']] = {'packet_data': '', 
                                                    'in_buffer': False,
-                                                   'eof': decoded['eof']}
+                                                   'eof': False}
 
       if not self.packet_buffer[decoded['sequence']]['in_buffer']:
         self.packet_buffer[decoded['sequence']]['in_buffer'] = True
-        #self.packet_buffer[decoded['sequence']]['eof'] = decoded['eof']
-        #self.packet_buffer[decoded['sequence']]['data'] = decoded['data']
+        self.packet_buffer[decoded['sequence']]['eof'] = decoded['eof']
+        self.packet_buffer[decoded['sequence']]['data'] = decoded['data']
 
         if (decoded['sequence'] != self.current_sequence_num):
           log("[Accept Data]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) +
