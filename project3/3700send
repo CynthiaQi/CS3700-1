@@ -30,8 +30,8 @@ class Sender(object):
 		self.last_sent_byte = 0
 
 		# blank counters
-		self.packet_timers = dict()
-		self.dup_ack_counters = dict()
+		#self.packet_timers = dict()
+		#self.dup_ack_counters = dict()
 
 		self.dest = dest
 		self.sock = self.init_socket()
