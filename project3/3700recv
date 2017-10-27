@@ -68,7 +68,7 @@ class Receiver(object):
 
         if (decoded['sequence'] != self.current_sequence_num):
           log("[Accept Data]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) +
-            ") (out-of-order)."))
+            ") (out-of-order)")
         else:
           log("[Accept Data]: " + str(decoded['sequence']) + " (" + str(len(decoded['data'])) + 
             ") (in-order)")
