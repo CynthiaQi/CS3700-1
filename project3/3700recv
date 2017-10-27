@@ -90,7 +90,7 @@ class Receiver(object):
               self.current_sequence_num += len(self.packet_buffer[self.current_sequence_num]['data'])
 
         # Send an ACK regardless of sequence number
-        self.send_ack(decoded['sequence'])  
+      self.send_ack(decoded['sequence'])  
 
     except (ValueError, KeyError, TypeError) as e:
       log("[Error]: Received corrupt packet")
