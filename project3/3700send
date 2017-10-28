@@ -146,7 +146,7 @@ class Sender(object):
       sequence_num_str = str(decoded['ack'])
       expected_seq_str = decoded['expected_seq']
       # If we got an ACK for an unACKed packet, send the next packet
-      if sequence_num_string in self.sent_data_dict.keys():
+      if sequence_num_str in self.sent_data_dict.keys():
         log("[Recv ACK]: " + sequence_num_str)
         # Add ACKed packet to acked_data_dict
         self.acked_data_dict[sequence_num_str] = self.sent_data_dict[sequence_num_str]
