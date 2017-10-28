@@ -21,7 +21,6 @@ class Receiver(object):
     self.addr = 0
     self.current_sequence_num = 0
     self.sock = self.init_socket()
-    #self.acked_data_dict = dict()
     self.packet_buffer = dict()
 
   def init_socket(self):
@@ -85,7 +84,7 @@ class Receiver(object):
 
               # if the EOF flag is set, exit
               if (self.packet_buffer[self.current_sequence_num]['eof']):
-                self.on_finished()
+                self.on_finished(self.packet_buffer[self.current_sequence_num])
               else:
                 # increment expected sequence number
                 self.current_sequence_num += len(self.packet_buffer[self.current_sequence_num]['data'])
@@ -107,7 +106,7 @@ class Receiver(object):
 
   # TODO check if built checksum matches packet checksum
   def check_packet_valid(self, packet):
-    return packet['checksum'] == build_checksum(packet['data'])
+    return packet['checksum'] == self.build_checksum(packet['data'])
 
   ## methods for responding
 
@@ -124,7 +123,7 @@ class Receiver(object):
       log("[Sent ACK]: " + msg)
 
   # finish when we hit the eof flag
-  def on_finished(self):
+  def on_finished(self, packet):
     log("[Recieved EOF]: Stopping...")
     sys.exit(0)
 
