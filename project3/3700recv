@@ -116,7 +116,7 @@ class Receiver(object):
   # send an ack to sender
   def send_ack(self, sequence_num):
     # Create the ACK
-    msg = json.dumps({"ack": sequence_num})
+    msg = json.dumps({"ack": sequence_num, "expected_sequence" : self.current_sequence_num})
     # Send the ACK
     if self.sock.sendto(msg, self.addr) < len(msg):
       # The ACK failed to send
