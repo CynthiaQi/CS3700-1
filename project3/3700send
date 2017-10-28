@@ -83,7 +83,8 @@ class Sender(object):
 
   # calc congestion window after 3 duplicate acks are recieved
   def calc_cong_wind_dup_acks(self):
-    pass
+    self.ssthresh = max(self.cwnd / 2.0, 2)
+    self.cwnd = max(self.ssthresh, 1)
 
   # calc congestion window after an ack is received
   def calc_cong_wind_ack(self):
@@ -142,14 +143,15 @@ class Sender(object):
     global SEQUENCE
     try:
       decoded = self.parse_receiver_msg(data)
-      sequence_num_string = str(decoded['ack'])
+      sequence_num_str = str(decoded['ack'])
+      expected_seq_str = decoded['expected_seq']
       # If we got an ACK for an unACKed packet, send the next packet
       if sequence_num_string in self.sent_data_dict.keys():
-        log("[Recv ACK]: " + sequence_num_string)
+        log("[Recv ACK]: " + sequence_num_str)
         # Add ACKed packet to acked_data_dict
-        self.acked_data_dict[sequence_num_string] = self.sent_data_dict[sequence_num_string]
+        self.acked_data_dict[sequence_num_str] = self.sent_data_dict[sequence_num_str]
         # Remove ACKed packet from sent_data_dict
-        del self.sent_data_dict[sequence_num_string]
+        del self.sent_data_dict[sequence_num_str]
         # Increment the sequence number to expect the next packet
         SEQUENCE += DATA_SIZE
         # Calculate the new congestion window
@@ -165,7 +167,8 @@ class Sender(object):
 
   # handle a duplicate ack
   def handle_dup_ack(self, data):
-    pass
+    self.calc_cong_wind_dup_acks()
+    self.retransmit_packet()
 
 
 if __name__ == '__main__':
