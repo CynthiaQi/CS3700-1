@@ -83,7 +83,7 @@ class Sender(object):
 
 	# calc congestion window after 3 duplicate acks are recieved
 	def calc_cong_wind_dup_acks(self):
-		self.cwnd
+		pass
 
 	# calc congestion window after an ack is received
 	def calc_cong_wind_ack(self):

@@ -58,7 +58,7 @@ class Receiver(object):
     try:
       decoded = self.parse_sender_msg(data)
 
-      if (self.check_packet_valid(decoded)) 
+      if (self.check_packet_valid(decoded)): 
         # add packet to buffer
         if (decoded['sequence'] not in self.packet_buffer):
           self.packet_buffer[decoded['sequence']] = {'packet_data': '', 
@@ -92,7 +92,7 @@ class Receiver(object):
         
         # Send an ACK regardless of sequence number
         self.send_ack(decoded['sequence']) 
-        
+
       else:
         log("[Error]: Received corrupt packet")
 
