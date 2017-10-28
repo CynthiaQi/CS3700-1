@@ -105,7 +105,7 @@ class Sender(object):
 
       if (len(data) > 0):
         # Attempt to send the next packet
-        checksum = self.build_checksum(data)
+        checksum = self.build_checksum([sequence_num, data])
         msg = json.dumps({"sequence": sequence_num, "data": data, "ack": False, "eof": False, "checksum" : checksum})
         if self.sock.sendto(msg, self.dest) < len(msg):
           log("[Error]: Unable to fully send data")
