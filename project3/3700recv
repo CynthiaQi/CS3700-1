@@ -57,10 +57,7 @@ class Receiver(object):
     try:
       decoded = self.parse_sender_msg(data)
 
-      decoded_sequence = decoded['sequence']
-      decoded_data = decoded['data']
-
-      if (self.check_packet_valid([decoded_sequence, decoded_data])): 
+      if (self.check_packet_valid(decoded)): 
         # add packet to buffer
         if (decoded['sequence'] not in self.packet_buffer):
           self.packet_buffer[decoded['sequence']] = {'packet_data': '', 
@@ -109,7 +106,9 @@ class Receiver(object):
 
   # TODO check if built checksum matches packet checksum
   def check_packet_valid(self, packet):
-    return packet['checksum'] == self.build_checksum(packet['data'])
+    recv_checksum = self.build_checksum([packet['sequence'], packet['data']])
+    log("checksum = " + str(packet['checksum']) + " calc checksum = " + str(recv_checksum))
+    return packet['checksum'] == recv_checksum
 
   ## methods for responding
 
