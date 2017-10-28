@@ -60,7 +60,7 @@ class Sender(object):
 
     self.transmit_eof()
   
-  # Transmit EOF packeti
+  # Transmit EOF packet
   def transmit_eof(self):
     # Send several times to make sure it gets through
     for x in range(5):
@@ -83,10 +83,7 @@ class Sender(object):
 
   # calc congestion window after 3 duplicate acks are recieved
   def calc_cong_wind_dup_acks(self):
-    # TCP Reno Fast Recovery
-    self.ssthresh = (self.cwnd / 2.0)
-    self.cwnd = self.ssthresh
-    log("[Three Duplicate Acks]: cwnd: " + str(self.cwnd) + " ssthresh: " + str(self.ssthresh))
+    pass
 
   # calc congestion window after an ack is received
   def calc_cong_wind_ack(self):
@@ -155,21 +152,9 @@ class Sender(object):
         del self.sent_data_dict[sequence_num_string]
         # Increment the sequence number to expect the next packet
         SEQUENCE += DATA_SIZE
-
-        # create an ack entry for the expected sequence 
-        # this will cause retransmission of missing packet if 3 acks recieved
-        if (decoded['ack'] > decoded['expected_sequence']):
-          self.acked_data_dict[expected_seq] = self.acked_data_dict.get(expected_seq, 0) + 1
-
-          if self.acked_data_dict[decoded['expected_sequence']] == 3:
-            self.handle_3_dup_ack(decoded)
-            del self.acked_data_dict[decoded['expected_sequence']]
-        #TODO convert code to work with expected sequence 
-        else:
-          # Calculate the new congestion window
-          self.calc_cong_wind_ack()
-          # Transmit next set of packets if every sent packet was ACKed
-        
+        # Calculate the new congestion window
+        self.calc_cong_wind_ack()
+        # Transmit next set of packets if every sent packet was ACKed
         if len(self.sent_data_dict) == 0:
           # (Returning this allows us to determine whether to break the main loop)
           return self.transmit_packet()
@@ -180,8 +165,7 @@ class Sender(object):
 
   # handle a duplicate ack
   def handle_dup_ack(self, data):
-    self.calc_cong_wind_dup_acks()
-    self.retransmit_packets()
+    pass
 
 
 if __name__ == '__main__':
