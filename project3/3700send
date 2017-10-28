@@ -56,7 +56,7 @@ class Sender(object):
         # Calculate new congestion window
         self.calc_cong_wind_timeout()
         # Retransmit the originally sent packet
-        self.retransmit_packet()
+        self.retransmit_packets()
 
     self.transmit_eof()
   
@@ -77,7 +77,7 @@ class Sender(object):
   # calc congestion window after a timeout
   def calc_cong_wind_timeout(self):
     # Multiplicative decrease
-    self.ssthresh = max(self.cwnd / 2.0, 2)
+    self.ssthresh = max(self.cwnd / 2.0, 2.0)
     self.cwnd = 1.0
     log("[Sliding Window Timeout]: cwnd: " + str(self.cwnd) + " ssthresh: " + str(self.ssthresh))
 
@@ -123,8 +123,8 @@ class Sender(object):
     # Continue the main loop by default
     return True
 
-  # retransmits unacked packet
-  def retransmit_packet(self):
+  # retransmits unacked packets
+  def retransmit_packets(self):
     # For each sent, unACKed packet
     for sequence_num in self.sent_data_dict.keys():
       # Attempt to retransmit
@@ -146,28 +146,27 @@ class Sender(object):
     try:
       decoded = self.parse_receiver_msg(data)
       sequence_num_string = str(decoded['ack'])
+      expected_seq = decoded['expected_sequence']
 
       # If we got an ACK for an unACKed packet, send the next packet
       if sequence_num_string in self.sent_data_dict.keys():
         log("[Recv ACK]: " + sequence_num_string)
 
+        # Add ACKed packet to acked_data_dict
+        self.acked_data_dict[sequence_num_string] = 1
+        # Remove ACKed packet from sent_data_dict
+        del self.sent_data_dict[sequence_num_string]
+
         # create an ack entry for the expected sequence 
         # this will cause retransmission of missing packet if 3 acks recieved
         if (decoded['ack'] != decoded['expected_sequence']):
-          if decoded['expected_sequence'] in self.acked_data_dict:
-            self.acked_data_dict[decoded['expected_sequence']] += 1
-            if self.acked_data_dict[decoded['expected_sequence']] == 3:
-              self.handle_3_dup_ack(decoded)
-              del self.acked_data_dict[decoded['expected_sequence']]
-          else:
-            self.acked_data_dict[decoded['expected_sequence']] = 1
+          self.acked_data_dict[expected_seq] = self.acked_data_dict.get(expected_seq, 0) + 1
 
+          if self.acked_data_dict[decoded['expected_sequence']] == 3:
+            self.handle_3_dup_ack(decoded)
+            del self.acked_data_dict[decoded['expected_sequence']]
         #TODO convert code to work with expected sequence 
         else:
-          # Add ACKed packet to acked_data_dict
-          self.acked_data_dict[sequence_num_string] = self.sent_data_dict[sequence_num_string]
-          # Remove ACKed packet from sent_data_dict
-          del self.sent_data_dict[sequence_num_string]
           # Increment the sequence number to expect the next packet
           SEQUENCE += DATA_SIZE
           # Calculate the new congestion window
@@ -184,7 +183,7 @@ class Sender(object):
   # handle the duplicate acks
   def handle_3_dup_ack(self, data):
     self.calc_cong_wind_dup_acks()
-    self.retransmit_packet()
+    self.retransmit_packets()
 
 
 if __name__ == '__main__':
