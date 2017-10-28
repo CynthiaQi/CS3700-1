@@ -159,7 +159,7 @@ class Sender(object):
 
         # create an ack entry for the expected sequence 
         # this will cause retransmission of missing packet if 3 acks recieved
-        if (decoded['ack'] > decoded['expected_sequence']):
+        if (decoded['ack'] != decoded['expected_sequence']):
           self.acked_data_dict[expected_seq] = self.acked_data_dict.get(expected_seq, 0) + 1
 
           if self.acked_data_dict[decoded['expected_sequence']] == 3:
