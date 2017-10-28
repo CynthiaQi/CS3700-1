@@ -156,6 +156,8 @@ class Sender(object):
         self.acked_data_dict[sequence_num_string] = 1
         # Remove ACKed packet from sent_data_dict
         del self.sent_data_dict[sequence_num_string]
+        # Increment the sequence number to expect the next packet
+        SEQUENCE += DATA_SIZE
 
         # create an ack entry for the expected sequence 
         # this will cause retransmission of missing packet if 3 acks recieved
@@ -167,14 +169,13 @@ class Sender(object):
             del self.acked_data_dict[decoded['expected_sequence']]
         #TODO convert code to work with expected sequence 
         else:
-          # Increment the sequence number to expect the next packet
-          SEQUENCE += DATA_SIZE
           # Calculate the new congestion window
           self.calc_cong_wind_ack()
           # Transmit next set of packets if every sent packet was ACKed
-          if len(self.sent_data_dict) == 0:
-            # (Returning this allows us to determine whether to break the main loop)
-            return self.transmit_packet()
+        
+        if len(self.sent_data_dict) == 0:
+          # (Returning this allows us to determine whether to break the main loop)
+          return self.transmit_packet()
     except (ValueError, KeyError, TypeError):
       log("[Error]: Received corrupt packet")
     # By default, do not break the main loop
