@@ -82,11 +82,8 @@ class Sender(object):
     log("[Sliding Window Timeout]: cwnd: " + str(self.cwnd) + " ssthresh: " + str(self.ssthresh))
 
   # calc congestion window after 3 duplicate acks are recieved
-  def calc_cong_wind_3_dup_acks(self):
-    # TCP Reno Fast Recovery
-    self.ssthresh = (self.cwnd / 2.0)
-    self.cwnd = self.ssthresh
-    log("[Three Duplicate Acks]: cwnd: " + str(self.cwnd) + " ssthresh: " + str(self.ssthresh))
+  def calc_cong_wind_dup_acks(self):
+    pass
 
   # calc congestion window after an ack is received
   def calc_cong_wind_ack(self):
@@ -146,45 +143,29 @@ class Sender(object):
     try:
       decoded = self.parse_receiver_msg(data)
       sequence_num_string = str(decoded['ack'])
-
       # If we got an ACK for an unACKed packet, send the next packet
       if sequence_num_string in self.sent_data_dict.keys():
         log("[Recv ACK]: " + sequence_num_string)
-
-        # create an ack entry for the expected sequence 
-        # this will cause retransmission of missing packet if 3 acks recieved
-        if (decoded['ack'] != decoded['expected_sequence']):
-          if decoded['expected_sequence'] in self.acked_data_dict:
-            self.acked_data_dict[decoded['expected_sequence']] += 1
-            if self.acked_data_dict[decoded['expected_sequence']] == 3:
-              self.handle_3_dup_ack(decoded)
-              del self.acked_data_dict[decoded['expected_sequence']]
-          else:
-            self.acked_data_dict[decoded['expected_sequence']] = 1
-
-        #TODO convert code to work with expected sequence 
-        else:
-          # Add ACKed packet to acked_data_dict
-          self.acked_data_dict[sequence_num_string] = self.sent_data_dict[sequence_num_string]
-          # Remove ACKed packet from sent_data_dict
-          del self.sent_data_dict[sequence_num_string]
-          # Increment the sequence number to expect the next packet
-          SEQUENCE += DATA_SIZE
-          # Calculate the new congestion window
-          self.calc_cong_wind_ack()
-          # Transmit next set of packets if every sent packet was ACKed
-          if len(self.sent_data_dict) == 0:
-            # (Returning this allows us to determine whether to break the main loop)
-            return self.transmit_packet()
+        # Add ACKed packet to acked_data_dict
+        self.acked_data_dict[sequence_num_string] = self.sent_data_dict[sequence_num_string]
+        # Remove ACKed packet from sent_data_dict
+        del self.sent_data_dict[sequence_num_string]
+        # Increment the sequence number to expect the next packet
+        SEQUENCE += DATA_SIZE
+        # Calculate the new congestion window
+        self.calc_cong_wind_ack()
+        # Transmit next set of packets if every sent packet was ACKed
+        if len(self.sent_data_dict) == 0:
+          # (Returning this allows us to determine whether to break the main loop)
+          return self.transmit_packet()
     except (ValueError, KeyError, TypeError):
       log("[Error]: Received corrupt packet")
     # By default, do not break the main loop
     return True
 
-  # handle the duplicate acks
-  def handle_3_dup_ack(self, data):
-    self.calc_cong_wind_dup_acks()
-    self.retransmit_packet()
+  # handle a duplicate ack
+  def handle_dup_ack(self, data):
+    pass
 
 
 if __name__ == '__main__':
