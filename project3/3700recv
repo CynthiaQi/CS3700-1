@@ -57,7 +57,10 @@ class Receiver(object):
     try:
       decoded = self.parse_sender_msg(data)
 
-      if (self.check_packet_valid([decoded['sequence'], decoded['data']])): 
+      decoded_sequence = decoded['sequence']
+      decoded_data = decoded['data']
+
+      if (self.check_packet_valid([decoded_sequence, decoded_data])): 
         # add packet to buffer
         if (decoded['sequence'] not in self.packet_buffer):
           self.packet_buffer[decoded['sequence']] = {'packet_data': '', 
