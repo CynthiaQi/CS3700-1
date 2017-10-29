@@ -63,15 +63,17 @@ class Sender(object):
   # Transmit EOF packet
   def transmit_eof(self):
     # Send several times to make sure it gets through
+    checksum = self.build_checksum([SEQUENCE, "", False, True])
     for x in range(5):
-      self.sock.sendto(json.dumps({"eof": True, "data": "", "sequence": SEQUENCE, "ack": False, "checksum" : ""}), self.dest)
+      self.sock.sendto(json.dumps({"eof": True, "data": "", "sequence": SEQUENCE, "ack": False, "checksum" : checksum}), self.dest)
     log("[Sent EOF]: Stopping...")
 
   ## methods for sending data    
 
   # build a checksum from the data
   def build_checksum(self, data):
-    data_string = ''.join([`x` for x in data])
+    data_string = ''.join([str(x) for x in data])
+    #log("sender checksum string " + data_string)
     return hashlib.md5(data_string).hexdigest()
 
   # calc congestion window after a timeout
@@ -106,7 +108,7 @@ class Sender(object):
 
       if (len(data) > 0):
         # Attempt to send the next packet
-        checksum = self.build_checksum([sequence_num, data])
+        checksum = self.build_checksum([sequence_num, data, False, False])
         msg = json.dumps({"sequence": sequence_num, "data": data, "ack": False, "eof": False, "checksum" : checksum})
         if self.sock.sendto(msg, self.dest) < len(msg):
           log("[Error]: Unable to fully send data")
@@ -150,7 +152,7 @@ class Sender(object):
       if (decoded['ack'] > decoded['expected_seq']):
         self.acked_data_dict[expected_seq_str] = self.acked_data_dict.get(expected_seq_str, 0) + 1
         if self.acked_data_dict[expected_seq_str] == 3:
-          self.handle_3_dup_ack(decoded)           
+          self.handle_dup_ack(decoded)           
           self.acked_data_dict[expected_seq_str] = 0
 
       # If we got an ACK for an unACKed packet, send the next packet
