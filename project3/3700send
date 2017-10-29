@@ -178,9 +178,9 @@ class Sender(object):
     self.calc_cong_wind_dup_acks()
     msg = self.sent_data_dict[data['expected_seq']]
     if self.sock.sendto(msg, self.dest) < len(msg):
-        log("[Error]: Unable to fully resend packet")
-      else:
-        log("[Resend Data]: " + data['expected_seq'])
+      log("[Error]: Unable to fully resend packet")
+    else:
+      log("[Resend Data]: " + data['expected_seq'])
 
 if __name__ == '__main__':
   # bind to localhost and an ephemeral port
