@@ -18,10 +18,9 @@ def log(string):
 class Sender(object):
 	# init methods
 	def __init__(self, dest):
-		# data dependent
-		self.sent_data_dict = dict()
-		self.acked_data_dict = dict()
-		self.sent_data_timer_dict = dict()
+		self.sent_data_dict = dict()  # Keep track of sent packets
+		self.acked_data_dict = dict()  # Keep track of the timeouts of sent packets
+		self.sent_data_timer_dict = dict()  # Keep track of how many ACKs for each sent packet
 
 		self.cwnd = 1.0
 		self.ssthresh = 10000.0
@@ -76,7 +75,6 @@ class Sender(object):
 	# build a checksum from the data
 	def build_checksum(self, data):
 		data_string = ''.join([str(x) for x in data])
-		#log("sender checksum string " + data_string)
 		return hashlib.md5(data_string).hexdigest()
 
 	# calc congestion window after a timeout
@@ -119,6 +117,7 @@ class Sender(object):
 				if self.sock.sendto(msg, self.dest) < len(msg):
 					log("[Error]: Unable to fully send data")
 				else:
+					# Data successfully sent, set the packet timeout
 					log("[Send Data]: " + str(sequence_num) + " (" + str(len(data)) + ")")
 					self.sent_data_timer_dict[str(sequence_num)] = time.time()
 
@@ -134,12 +133,14 @@ class Sender(object):
 	def retransmit_packet(self):
 		# For each sent, unACKed packet
 		for sequence_num in self.sent_data_timer_dict.keys():
+			# Check if the packet has timed out
 			if time.time() - self.sent_data_timer_dict[sequence_num] >= (.2 * self.cwnd):
 				# Attempt to retransmit
 				msg = self.sent_data_dict[sequence_num]
 				if self.sock.sendto(msg, self.dest) < len(msg):
 					log("[Error]: Unable to fully resend packet")
 				else:
+					# Data successfully resent, reset the packet timer
 					log("[Resend Data]: " + sequence_num)
 					self.sent_data_timer_dict[sequence_num] = time.time()
 
@@ -170,7 +171,7 @@ class Sender(object):
 				log("[Recv ACK]: " + sequence_num_str)
 				# Add ACKed packet to acked_data_dict
 				self.acked_data_dict[sequence_num_str] = self.sent_data_dict[sequence_num_str]
-				# Remove ACKed packet from sent_data_dict
+				# Remove ACKed packet from sent_data_dict and its associated timeout
 				del self.sent_data_dict[sequence_num_str]
 				del self.sent_data_timer_dict[sequence_num_str]
 				# Increment the sequence number to expect the next packet
@@ -186,10 +187,11 @@ class Sender(object):
 		# By default, do not break the main loop
 		return True
 
-	# handle a duplicate ack
+	# handle three duplicate acks
 	def handle_dup_ack(self, data):
 		self.calc_cong_wind_dup_acks()
 		msg = self.sent_data_dict[data['expected_seq']]
+		# Resend the missing packet
 		if self.sock.sendto(msg, self.dest) < len(msg):
 			log("[Error]: Unable to fully resend packet")
 		else:
