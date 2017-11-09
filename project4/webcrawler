@@ -144,8 +144,6 @@ class WebCrawler(object):
             return 404
         elif "500 INTERNAL SERVER ERROR" in response:
             return 500
-        else:
-            return 200
 
     def handleRedirect(self, response):
         redirectPath = re.search(LOCATION_REGEX, response)
