@@ -40,7 +40,7 @@ class WebCrawler(object):
         self.initSocket()
         # login
         self.login()
-        # TODO crawl server
+        # TODO crawl server - commented out for now until parsing written
         #self.crawl()
 
     # go through login sequence
@@ -49,20 +49,18 @@ class WebCrawler(object):
         response = self.sendGetRequest(LOGIN_PATH)
         # get cookies from response - has set-cookie headers for sessionId and csrfToken
         self.setCookies(response)
-       	# login to server
+        # login to server
         response = self.sendLoginPostRequest()
         # get cookie from response - has set-cookie header for sessionId
         self.setCookies(response)
 
     # crawling sequence 
     def crawl(self):
-        # start at homepage
-        response = sendGetRequest("/fakebook/")
         # add homepage to visitedPaths post login in both forms so we don't revist in a loop
         self.visitedPaths.append("/fakebook/")
         self.visitedPaths.append("/fakebook")
-
-        #TODO parse urls from reponse and add to urls to visit
+        # start at homepage
+        self.pathsToVisit.append("/fakebook/")
 
         while len(self.pathsToVisit) > 0:
             path = self.pathsToVisit[0]
@@ -71,7 +69,9 @@ class WebCrawler(object):
 
             if responseCode == 200:
                 # TODO parse url paths from response and add to pathsToVisit
-                # TODO look for secret codes
+                self.parseUrlPaths(response)
+                # TODO look for secret flags
+                self.parseSecretFlags(response)
                 self.pathsToVisit.popLeft()     # remove from queue
                 self.visitedPaths.append(path)  # add to visited
                 self.areAllFlagsFound()         # check if crawling done
@@ -82,6 +82,12 @@ class WebCrawler(object):
                 self.pathsToVisit.popLeft()     # remove from queue
             elif responseCode == 500: 
                 continue                        # retry the link
+
+    def parseUrlPaths(self, response):
+        pass
+
+    def parseSecretFlags(self, response):
+        pass
 
     # check if all secret flags are found and print them
     def areAllFlagsFound(self):
