@@ -8,7 +8,7 @@ from collections import deque
 HOST = "fring.ccs.neu.edu"
 PORT = 80
 RECV_BUFFSIZE = 100000 # arbitrarily huge
-LOGIN_PATH = "/accounts/login/?next=/fakebook/"
+LOGIN_PATH = "/accounts/login/"
 CSRF_TOKEN_REGEX = r'(csrftoken=)(\w{32})'
 SESSION_ID_REGEX = r'(sessionid=)(\w{32})'
 LOCATION_REGEX = r'(Location: .+.edu)(.+)'
@@ -49,11 +49,9 @@ class WebCrawler(object):
         response = self.sendGetRequest(LOGIN_PATH)
         # get cookies from response - has set-cookie headers for sessionId and csrfToken
         self.setCookies(response)
-        # login to server
+       	# login to server
         response = self.sendLoginPostRequest()
-        # get cookies from response - has set-cookie header for sessionId
-        # sessionId doesn't seem to change but project description specifically talks about
-        # post login session id specifically
+        # get cookie from response - has set-cookie header for sessionId
         self.setCookies(response)
 
     # crawling sequence 
@@ -82,9 +80,8 @@ class WebCrawler(object):
                 self.pathsToVisit.popLeft()     # remove from queue
             elif responseCode == 403 or responseCode == 404:
                 self.pathsToVisit.popLeft()     # remove from queue
-            elif responseCode == 500:
-                # retry the link 
-                continue
+            elif responseCode == 500: 
+                continue                        # retry the link
 
     # check if all secret flags are found and print them
     def areAllFlagsFound(self):
@@ -103,8 +100,7 @@ class WebCrawler(object):
 
     # build the message for a get request 
     def buildGetRequest(self, path):
-        request = "GET " + path + " HTTP/1.1\r\nHost: " + HOST + "\r\nCookie: csrftoken=" 
-            + self.csrfToken + "; sessionid=" + self.sessionId + "\r\nConnection:keep-alive\r\n\r\n"
+        request = "GET " + path + " HTTP/1.1\r\nHost: " + HOST + "\r\nCookie: csrftoken=" + self.csrfToken + "; sessionid=" + self.sessionId + "\r\nConnection:keep-alive\r\n\r\n"
         return request
 
     # post a login
@@ -116,12 +112,8 @@ class WebCrawler(object):
 
     # build the request string for a login post 
     def buildLoginPostRequest(self):
-        content = "csrfmiddlewaretoken=" + self.csrfToken + "&username=" + self.username 
-            + "&password=" + self.password + "&next=%2Ffakebook%2F"
-        request = "POST " + LOGIN_PATH + " HTTP/1.1\r\nHost: " + HOST + "\r\nReferrer: " + HOST 
-            + LOGIN_PATH + "\r\nCookie: csrftoken=" + self.csrfToken + "; sessionid=" + self.sessionId 
-            + "\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: " + len(content) 
-            + "\r\nConnection:keep-alive\r\n\r\n" + content + "\r\n"
+        content = "csrfmiddlewaretoken=" + self.csrfToken + "&username=" + self.username + "&password=" + self.password + "&next=%2Ffakebook%2F"
+        request = "POST " + LOGIN_PATH + " HTTP/1.1\r\nHost: " + HOST + "\r\nReferrer: " + HOST + LOGIN_PATH + "\r\nCookie: csrftoken=" + self.csrfToken + "; sessionid=" + self.sessionId + "\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: " + str(len(content)) + "\r\nConnection:keep-alive\r\n\r\n" + content + "\r\n"
         return request
 
     # parse the response for cookies and set them
@@ -158,8 +150,8 @@ class WebCrawler(object):
 
 
 if __name__ == '__main__':
-    username = argv[1]
-    password = argv[2]
+    username = sys.argv[1]
+    password = sys.argv[2]
 
     webCrawler = WebCrawler(username, password)
     webCrawler.start()
