@@ -75,7 +75,7 @@ class WebCrawler(object):
                 self.pathsToVisit.popLeft()     # remove from queue
                 self.visitedPaths.append(path)  # add to visited
                 self.areAllFlagsFound()         # check if crawling done
-            elif responseCode == 301:
+            elif responseCode == 301 or responseCode == 302:
                 self.handleRedirect(response)
                 self.pathsToVisit.popLeft()     # remove from queue
             elif responseCode == 403 or responseCode == 404:
@@ -138,8 +138,10 @@ class WebCrawler(object):
     def getResponseCode(self, response):
         if "200 OK" in response:
             return 200
-        elif "301 MOVED" in response:
+        elif "301 MOVED PERMANENTLY" in response:
             return 301
+        elif "302 FOUND" in response:
+            return 302
         elif "403 FORBIDDEN" in response:
             return 403
         elif "404 NOT FOUND" in response:
