@@ -1,8 +1,17 @@
 #!/usr/bin/python -u
-
 import sys
 import socket
 import re
+from collections import deque
+
+# global variables
+HOST = "fring.ccs.neu.edu"
+PORT = 80
+RECV_BUFFSIZE = 100000 # arbitrarily huge
+LOGIN_PATH = "/accounts/login/?next=/fakebook/"
+CSRF_TOKEN_REGEX = r'(csrftoken=)(\w{32})'
+SESSION_ID_REGEX = r'(sessionid=)(\w{32})'
+LOCATION_REGEX = r'(Location: .+.edu)(.+)'
 
 class WebCrawler(object):
     def __init__(self, username, password):
@@ -15,11 +24,12 @@ class WebCrawler(object):
         # socket to reuse
         self.socket = None
         # crawler info to track
-        self.urlsToVisit = []   # queue of urls to visit
-        self.visitedUrls = []   # track to make sure we don't keep visiting same urls
+        self.pathsToVisit = deque()   # queue of paths to visit
+        self.visitedPaths = []        # track to make sure we don't keep visiting same paths
         # flags to track - need to find 5
         self.secretFlags = []
 
+    # initialize and connect to a socket object
     def initSocket(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.connect((HOST, PORT)) 
@@ -30,29 +40,53 @@ class WebCrawler(object):
         self.initSocket()
         # login
         self.login()
-        # crawl server
-        self.crawl()
+        # TODO crawl server
+        #self.crawl()
 
     # go through login sequence
     def login(self):
         # load initial login page
-        response = sendGetRequest(LOGIN_PATH)
+        response = self.sendGetRequest(LOGIN_PATH)
         # get cookies from response - has set-cookie headers for sessionId and csrfToken
-        setCookies(response)
+        self.setCookies(response)
         # login to server
-        response = sendLoginPostRequest()
+        response = self.sendLoginPostRequest()
         # get cookies from response - has set-cookie header for sessionId
         # sessionId doesn't seem to change but project description specifically talks about
         # post login session id specifically
-        setCookies(response)
-        # add homepage to visitedUrls post login in both forms so we don't revist
-        visitedUrls.append("/fakebook/")
-        visitedUrls.append("/fakebook")
+        self.setCookies(response)
 
     # crawling sequence 
     def crawl(self):
-        pass
+        # start at homepage
+        response = sendGetRequest("/fakebook/")
+        # add homepage to visitedPaths post login in both forms so we don't revist in a loop
+        self.visitedPaths.append("/fakebook/")
+        self.visitedPaths.append("/fakebook")
 
+        #TODO parse urls from reponse and add to urls to visit
+
+        while len(self.pathsToVisit) > 0:
+            path = self.pathsToVisit[0]
+            response = self.sendGetRequest(path)
+            responseCode = self.getResponseCode(response)
+
+            if responseCode == 200:
+                # TODO parse url paths from response and add to pathsToVisit
+                # TODO look for secret codes
+                self.pathsToVisit.popLeft()     # remove from queue
+                self.visitedPaths.append(path)  # add to visited
+                self.areAllFlagsFound()         # check if crawling done
+            elif responseCode == 301:
+                self.handleRedirect(response)
+                self.pathsToVisit.popLeft()     # remove from queue
+            elif responseCode == 403 or responseCode == 404:
+                self.pathsToVisit.popLeft()     # remove from queue
+            elif responseCode == 500:
+                # retry the link 
+                continue
+
+    # check if all secret flags are found and print them
     def areAllFlagsFound(self):
         if len(self.secretFlags) == 5:
             for flag in self.secretFlags:
@@ -80,6 +114,7 @@ class WebCrawler(object):
         response = self.socket.recv(RECV_BUFFSIZE)
         return response
 
+    # build the request string for a login post 
     def buildLoginPostRequest(self):
         content = "csrfmiddlewaretoken=" + self.csrfToken + "&username=" + self.username 
             + "&password=" + self.password + "&next=%2Ffakebook%2F"
@@ -89,6 +124,7 @@ class WebCrawler(object):
             + "\r\nConnection:keep-alive\r\n\r\n" + content + "\r\n"
         return request
 
+    # parse the response for cookies and set them
     def setCookies(self, response):
         csrfToken = re.search(CSRF_TOKEN_REGEX, response)
         sessionId = re.search(SESSION_ID_REGEX, response)
@@ -98,6 +134,7 @@ class WebCrawler(object):
         if sessionId is not None:
             self.sessionId = sessionId.group(2)
 
+    # get the response code from the response
     def getResponseCode(self, response):
         if "200 OK" in response:
             return 200
@@ -113,18 +150,14 @@ class WebCrawler(object):
             return 200
 
     def handleRedirect(self, response):
-        pass
+        redirectPath = re.search(LOCATION_REGEX, response)
+
+        if (redirectPath is not None) and (redirectPath.group(2) not in self.pathsToVisit):
+            self.pathsToVisit.append(redirectPath.group(2))
 
 
 
 if __name__ == '__main__':
-    HOST = "fring.ccs.neu.edu"
-    PORT = 80
-    RECV_BUFFSIZE = 100000 # arbitrarily huge
-    LOGIN_PATH = "/accounts/login/?next=/fakebook/"
-    CSRF_TOKEN_REGEX = r'(csrftoken=)(\w{32})'
-    SESSION_ID_REGEX = r'(sessionid=)(\w{32})'
-
     username = argv[1]
     password = argv[2]
 
