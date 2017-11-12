@@ -6,22 +6,37 @@ High Level Approach
 ----
 We simply started by stubbing out the methods we would need and creating a crawler class. Then, it was a matter of adding the ability to log into Fakebook. Once logged in, we had to crawl all the pages and add the appropriate queueing mechanisms in order to do that. Finally, we had to handle edge cases- the various response codes, chunking, socket timeout, etc. Finally, once the crawling was completely working, we needed only to add the logic for finding the secret flags.
 
-#### Crawler:
+Crawler
+----
 
 init                  -> Set credentials and initialize data structures
+
 initSocket            -> Create and open the socket for communicating with Fakebook
+
 start                 -> Inits the socket, logs in, and begins crawling
+
 login                 -> Handles logging in
+
 crawl                 -> Handles the crawling loop
+
 parseUrlPaths         -> Parses URLs on the page into the queue
+
 parseSecretFlags      -> Parses secret flags on the page into a list
+
 areAllFlagsFound      -> Determines if all five flags have been found and exits the program
+
 sendGetRequest        -> Send a GET request, handle chunking and empty responses, and return the response
+
 buildGetRequest       -> Builds the GET request that will be sent
+
 sendLoginPostRequest  -> Sends the POST request for logging in
+
 buildLoginPostRequest -> Builds the POST request for logging in
+
 setCookies            -> Parse result of login request for a cookie and set it for future requests
+
 getResponseCode       -> Determines the response code of each response
+
 handleRedirect        -> Handles redirects for a 301 response code
 
 Challenges
