@@ -70,7 +70,6 @@ class WebCrawler(object):
             if responseCode == 200:
                 # parse url paths from response and add to pathsToVisit
                 self.parseUrlPaths(response)
-                # TODO look for secret flags
                 self.parseSecretFlags(response)
                 self.pathsToVisit.popleft()     # remove from queue
                 self.visitedPaths.append(path)  # add to visited
