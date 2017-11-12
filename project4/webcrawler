@@ -32,7 +32,7 @@ class WebCrawler(object):
     # initialize and connect to a socket object
     def initSocket(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.connect((HOST, PORT)) 
+        self.socket.connect((HOST, PORT))
 
     # login and begin crawling process
     def start(self):
@@ -40,8 +40,8 @@ class WebCrawler(object):
         self.initSocket()
         # login
         self.login()
-        # TODO crawl server - commented out for now until parsing written
-        #self.crawl()
+        # crawl server
+        self.crawl()
 
     # go through login sequence
     def login(self):
@@ -54,7 +54,7 @@ class WebCrawler(object):
         # get cookie from response - has set-cookie header for sessionId
         self.setCookies(response)
 
-    # crawling sequence 
+    # crawling sequence
     def crawl(self):
         # add homepage to visitedPaths post login in both forms so we don't revist in a loop
         self.visitedPaths.append("/fakebook/")
@@ -68,28 +68,37 @@ class WebCrawler(object):
             responseCode = self.getResponseCode(response)
 
             if responseCode == 200:
-                # TODO parse url paths from response and add to pathsToVisit
+                # parse url paths from response and add to pathsToVisit
                 self.parseUrlPaths(response)
                 # TODO look for secret flags
                 self.parseSecretFlags(response)
-                self.pathsToVisit.popLeft()     # remove from queue
+                self.pathsToVisit.popleft()     # remove from queue
                 self.visitedPaths.append(path)  # add to visited
                 self.areAllFlagsFound()         # check if crawling done
             elif responseCode == 301 or responseCode == 302:
                 self.handleRedirect(response)
-                self.pathsToVisit.popLeft()     # remove from queue
+                self.pathsToVisit.popleft()     # remove from queue
             elif responseCode == 403 or responseCode == 404:
-                self.pathsToVisit.popLeft()     # remove from queue
-            elif responseCode == 500: 
+                self.pathsToVisit.popleft()     # remove from queue
+            elif responseCode == 500:
                 continue                        # retry the link
 
     # parse url paths from the html response
     def parseUrlPaths(self, response):
-        pass
+        # Parse all unique link tags starting with /fakebook/
+        urls = set(re.findall(r'href=[\'"]?(/fakebook/[^\'" >]+)', response))
+        for url in urls:
+            # If the URL is not already visited and not already queued
+            if url not in self.visitedPaths and url not in self.pathsToVisit:
+                # Append to the queue
+                self.pathsToVisit.append(url)
 
     # parse the secret flags from the html response
     def parseSecretFlags(self, response):
-        pass
+        if "FLAG" in response:
+            flags = re.findall(r'FLAG: ([^\'\" ><]+)', response)
+            for flag in flags:
+                self.secretFlags.append(flag)
 
     # check if all secret flags are found and print them
     def areAllFlagsFound(self):
@@ -104,9 +113,21 @@ class WebCrawler(object):
         request = self.buildGetRequest(path)
         self.socket.sendall(request)
         response = self.socket.recv(RECV_BUFFSIZE)
+
+        # If the socket has been closed or empty response
+        if len(response) < 10:
+            # Create a new socket
+            self.initSocket()
+            # Try again
+            return self.sendGetRequest(path)
+
+        # Handle chunking
+        if "<html>" in response:
+            while "</html>" not in response:
+                response += self.socket.recv(RECV_BUFFSIZE)
         return response
 
-    # build the message for a get request 
+    # build the message for a get request
     def buildGetRequest(self, path):
         request = "GET " + path + " HTTP/1.1\r\nHost: " + HOST + "\r\nCookie: csrftoken=" + self.csrfToken + "; sessionid=" + self.sessionId + "\r\nConnection:keep-alive\r\n\r\n"
         return request
@@ -118,7 +139,7 @@ class WebCrawler(object):
         response = self.socket.recv(RECV_BUFFSIZE)
         return response
 
-    # build the request string for a login post 
+    # build the request string for a login post
     def buildLoginPostRequest(self):
         content = "csrfmiddlewaretoken=" + self.csrfToken + "&username=" + self.username + "&password=" + self.password + "&next=%2Ffakebook%2F"
         request = "POST " + LOGIN_PATH + " HTTP/1.1\r\nHost: " + HOST + "\r\nReferrer: " + HOST + LOGIN_PATH + "\r\nCookie: csrftoken=" + self.csrfToken + "; sessionid=" + self.sessionId + "\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: " + str(len(content)) + "\r\nConnection:keep-alive\r\n\r\n" + content + "\r\n"
@@ -148,6 +169,8 @@ class WebCrawler(object):
             return 404
         elif "500 INTERNAL SERVER ERROR" in response:
             return 500
+        else:
+            raise ValueError("Unexpected Response: " + response)
 
     # handle the redirect
     def handleRedirect(self, response):
