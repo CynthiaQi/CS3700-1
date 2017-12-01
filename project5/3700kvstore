@@ -1,93 +1,242 @@
 #!/usr/bin/env python
 import sys, socket, select, time, json, random
 
+
 class Raft(object):
     def __init__(self, my_id, replica_ids):
         self.id = my_id
         self.replica_ids = replica_ids
         self.init_socket()
+
+        # Election timer
+        self.election_timer = None
+        # Randomly chosen election timeout
+        self.election_timeout = random.uniform(.5, 1.0)
+        # Heartbeat timer
+        self.heartbeat_timer = None
+        # Interval to send heartbeats is half of minimum election_timeout
+        self.heartbeat_interval = .5 / 2
+        # Maps replica ids to their vote
+        self.votes = dict()
+        # Current leader
+        self.leader = 'FFFF'
         # latest election term, increases monotonically
         self.current_term = 0
         # id of candidate voted for in the current term
         self.voted_for = None
+
         # the log entries
         self.log = []
         # highest log entry index commited
         self.commit_index = 0
         # highest log entry index applied to state machine
         self.last_applied = 0
+
         # leader only state
         # map of server id to next log entry to send to that server
         self.next_index = {}
         # map of server id to highest log entry known to be replicated there
         self.match_index = {}
 
-    def append_entries(self, term, leader_id, prev_idx, prev_term, entries, leader_commit):
-        """AppendEntries RPC
-        returns (currentTerm, success)"""
-        return (self.current_term, false)
 
-
-    # initialize and connect to a socket object
+    # Initialize and connect to a socket object
     def init_socket(self):
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
         self.socket.connect(self.id)
 
+
     # Event loop for receiving messages on the socket
     def receive(self):
+        # Start timers
+        self.election_timer = time.time()
+        self.heartbeat_timer = time.time()
+
+        # Loop and listen for messages
         while True:
+            # Wait for socket to be ready
             ready = select.select([self.socket], [], [], 0.1)[0]
             if self.socket in ready:
+                # Obtain the raw message from the socket
                 msg_raw = self.socket.recv(32768)
-                if len(msg_raw) == 0: continue
-                self.handle_message(msg_raw)
+                # If message is not empty, pass along to be parsed
+                if len(msg_raw) != 0:
+                    self.handle_message(msg_raw)
+
+                if self.leader == self.id:
+                    # If we are leader, send a heartbeat every heartbeat_interval
+                    if (time.time() - self.heartbeat_timer) > self.heartbeat_interval:
+                        self.send_heartbeat()
+                else:
+                    # If election timeout has passed and we are not leader, begin election process
+                    self.send_request_vote()
+
 
     # Handles when the event loop recieves a message on the socket
     def handle_message(self, msg_raw):
         try:
             msg = json.loads(msg_raw)
-            print('%s received a %s from %s' % (msg['dst'], msg['type'], msg['src']))
+            #print('%s received a %s from %s' % (msg['dst'], msg['type'], msg['src']))
 
             # Handle each message type
             if msg['type'] == 'get':
                 self.handle_get(msg)
             elif msg['type'] == 'put':
                 self.handle_put(msg)
+            elif msg['type'] == 'appendEntries':
+                self.handle_append_entries(msg)
+            elif msg['type'] == 'requestVote':
+                self.handle_request_vote(msg)
+            elif msg['type'] == 'vote':
+                self.handle_vote(msg)
         except (ValueError, KeyError, TypeError) as e:
-            print("[Error]: Received corrupt message!")
+            self.printlog("[Error]: Received corrupt message!")
             raise e
+
+
+    # Handle APPEND_ENTRIES type messages
+    def handle_append_entries(self, msg):
+        # Handle heartbeat messages (indicated by empty 'entries' list)
+        if len(msg['entries']) == 0:
+            # Reset the elction timer
+            self.election_timer = time.time()
+            # If term in heartbeat is larger or equal to current term
+            if self.current_term <= msg['term']:
+                # Update the current term and leader
+                self.current_term = msg['term']
+                self.leader = msg['leader']
+        else:
+            # Handle normal append entries RPC
+            pass # TODO: Rest of this
+
+
+    # Handle REQUEST_VOTE type messages
+    def handle_request_vote(self, msg):
+        # Default to False vote
+        vote = False
+        # If the term is greater than current_term, reset our vote
+        if msg['term'] > self.current_term:
+            self.voted_for = None
+            self.current_term = msg['term']
+
+        # Vote true if:
+            # Message term >= our current term
+            # We haven't voted or already voted for this candidate
+            # Logs are up to date
+            # TODO: Use the lastLogTerm field in this check
+        if (self.voted_for is None or self.voted_for == msg['src']) and msg['lastLogIndex'] >= len(self.log)-1:
+            vote = True
+            # Remember that we voted for this replica
+            self.voted_for = msg['src']
+            
+        # Send a vote message back to sender
+        vote_msg = {'src': self.id, 'dst': msg['src'], 'leader': self.leader,
+                    'type': 'vote', 'vote': vote}
+        self.socket.send(json.dumps(vote_msg))
+        # Reset election timer
+        self.election_timer = time.time()
+
+
+    # Handle VOTE type messages
+    def handle_vote(self, msg):
+        # Ignore votes if we are already leader
+        if self.leader != self.id:
+            # Record the vote
+            self.votes[msg['src']] = msg['vote']
+            # Determine if we have majority vote
+            vote_count = 0
+            for vote in self.votes.values():
+                if vote: vote_count += 1
+            # If we have majority True votes from the replicas
+            # NOTE: Total replica count = len(replica_ids) + 1
+            if vote_count > (len(self.replica_ids) + 1) / 2:
+                # Election was won, set self as leader and send heartbeat
+                self.leader = self.id
+                self.printlog("Election won with " + str(vote_count) + " votes for ID " + self.leader)
+                self.send_heartbeat()
+
 
     # Handle GET type messages
     def handle_get(self, msg):
         # FORMAT: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "get", "MID": "<a unique string>", "key": "<some key>"}
         # OK RESPONSE: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "ok", "MID": "<a unique string>", "value": "<value of the key>"}
         # If key does not exist return empty OK message for value of key
-        self.send_fail(msg['src'], msg['MID'])
+        # If we are not the leader, send a redirect message
+        if self.leader != self.id:
+            self.send_redirect(msg['src'], msg['MID'])
+        else:
+            pass # TODO: Handle get messages here
 
-    # Handle PUT type messages        
+
+    # Handle PUT type messages
     def handle_put(self, msg):
         # FORMAT: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "put", "MID": "<a unique string>", "key": "<some key>", "value": "<value of the key>"}
         # OK RESPONSE: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "ok", "MID": "<a unique string>"}
-        self.send_fail(msg['src'], msg['MID'])
-       
+        # If we are not the leader, send a redirect message
+        if self.leader != self.id:
+            self.send_redirect(msg['src'], msg['MID'])
+        else:
+            pass # TODO: Handle put messages here
+
+
+    # Send heartbeats
+    def send_heartbeat(self):
+        # Send a heartbeat message
+        # TODO: prevLogTerm and prevLogIndex fields
+        heartbeat_msg = {'src': self.id, 'dst': 'FFFF', 'leader': self.leader,
+                         'type': 'appendEntries', 'term': self.current_term,
+                         'entries': [], 'leaderCommit': self.commit_index,
+                         'prevLogTerm': 'TODO', 'prevLogIndex': 'TODO'}
+        self.socket.send(json.dumps(heartbeat_msg))
+        # Reset heartbeat timer
+        self.heartbeat_timer = time.time()
+
+
+    # Called to invoke election process and request votes
+    def send_request_vote(self):
+        # Begin the election if the election_timeout has passed without a heartbeat
+        if (time.time() - self.election_timer) > self.election_timeout:
+            # Reset from previous election
+            self.leader = 'FFFF'
+            self.votes = dict()
+            # Increment current_term
+            self.current_term += 1
+            self.voted_for = self.id
+            # Vote for self
+            self.votes[self.id] = True
+            # Reset election timer
+            self.election_timer = time.time()
+            # Send RequestVote RPCs to all replicas
+            # TODO: Last log term field
+            request_vote_msg = {'src': self.id, 'dst': 'FFFF', 'leader': self.leader,
+                                'type': 'requestVote', 'term': self.current_term,
+                                'lastLogIndex': len(self.log)-1, 'lastLogTerm': 'TODO'}
+            self.socket.send(json.dumps(request_vote_msg))
+            self.printlog("Beginning election " + str(self.current_term))
+
+
     # Sends a FAIL type message to given dest
     def send_fail(self, dest, message_id):
-        # TODO: Leader field
-        fail_msg = {'src': self.id, 'dst': dest, 'leader': 'FFFF', 'type': 'fail', 'MID': message_id}
+        fail_msg = {'src': self.id, 'dst': dest, 'leader': self.leader, 'type': 'fail', 'MID': message_id}
         self.socket.send(json.dumps(fail_msg))
-        
+
+
     # Sends a REDIRECT type message to given dest
     def send_redirect(self, dest, message_id):
-        # TODO: Leader field
-        redirect_msg = {'src': self.id, 'dst': dest, 'leader': 'FFFF', 'type': 'redirect', 'MID': message_id}
+        redirect_msg = {'src': self.id, 'dst': dest, 'leader': self.leader, 'type': 'redirect', 'MID': message_id}
         self.socket.send(json.dumps(redirect_msg))
-     
+
+
+    # Simple logging method
+    def printlog(self, log_message):
+        print("[" + self.id + "]: " + log_message)
+
+
 # main function
 if __name__ == '__main__':
     # Your ID number
     my_id = sys.argv[1]
     # The ID numbers of all the other replicas
     replica_ids = sys.argv[2:]
-
+    # Start the program
     raft = Raft(my_id, replica_ids)
     raft.receive()
