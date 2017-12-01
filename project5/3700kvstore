@@ -1,18 +1,38 @@
 #!/usr/bin/env python
 import sys, socket, select, time, json, random
-    
+
 class Raft(object):
     def __init__(self, my_id, replica_ids):
         self.my_id = my_id
         self.replica_ids = replica_ids
-        self.last = 0
-        self.initSocket()
-        
+        self.init_socket()
+        # latest election term, increases monotonically
+        self.current_term = 0
+        # id of candidate voted for in the current term
+        self.voted_for = None
+        # the log entries
+        self.log = []
+        # highest log entry index commited
+        self.commit_index = 0
+        # highest log entry index applied to state machine
+        self.last_applied = 0
+        # leader only state
+        # map of server id to next log entry to send to that server
+        self.next_index = {}
+        # map of server id to highest log entry known to be replicated there
+        self.match_index = {}
+
+    def append_entries(self, term, leader_id, prev_idx, prev_term, entries, leader_commit):
+        """AppendEntries RPC
+        returns (currentTerm, success)"""
+        return (self.current_term, false)
+
+
     # initialize and connect to a socket object
-    def initSocket(self):
+    def init_socket(self):
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
         self.socket.connect(self.my_id)
-    
+
     # Event loop for receiving messages on the socket
     def receive(self):
         while True:
@@ -32,13 +52,13 @@ class Raft(object):
 
             # Handle each message type
             if msg['type'] is 'get':
-                handle_get(msg)            
+                handle_get(msg)
             elif msg['type'] is 'put':
                 handle_put(msg)
         except (ValueError, KeyError, TypeError) as e:
             print("[Error]: Received corrupt message!")
             raise e
-          
+
     # Handle GET type messages
     def handle_get(self, msg):
         pass
