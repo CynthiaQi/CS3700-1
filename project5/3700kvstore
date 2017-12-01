@@ -3,7 +3,7 @@ import sys, socket, select, time, json, random
 
 class Raft(object):
     def __init__(self, my_id, replica_ids):
-        self.my_id = my_id
+        self.id = my_id
         self.replica_ids = replica_ids
         self.init_socket()
         # latest election term, increases monotonically
@@ -31,7 +31,7 @@ class Raft(object):
     # initialize and connect to a socket object
     def init_socket(self):
         self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
-        self.socket.connect(self.my_id)
+        self.socket.connect(self.id)
 
     # Event loop for receiving messages on the socket
     def receive(self):
@@ -41,8 +41,6 @@ class Raft(object):
                 msg_raw = self.socket.recv(32768)
                 if len(msg_raw) == 0: continue
                 self.handle_message(msg_raw)
-            #msg = {'src': my_id, 'dst': random.choice(replica_ids), 'leader': 'FFFF', 'type': 'noop'}
-            #self.socket.send(json.dumps(msg))
 
     # Handles when the event loop recieves a message on the socket
     def handle_message(self, msg_raw):
@@ -51,10 +49,10 @@ class Raft(object):
             print('%s received a %s from %s' % (msg['dst'], msg['type'], msg['src']))
 
             # Handle each message type
-            if msg['type'] is 'get':
-                handle_get(msg)
-            elif msg['type'] is 'put':
-                handle_put(msg)
+            if msg['type'] == 'get':
+                self.handle_get(msg)
+            elif msg['type'] == 'put':
+                self.handle_put(msg)
         except (ValueError, KeyError, TypeError) as e:
             print("[Error]: Received corrupt message!")
             raise e
@@ -63,18 +61,26 @@ class Raft(object):
     def handle_get(self, msg):
         # FORMAT: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "get", "MID": "<a unique string>", "key": "<some key>"}
         # OK RESPONSE: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "ok", "MID": "<a unique string>", "value": "<value of the key>"}
-        # FAIL RESPONSE: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "fail", "MID": "<a unique string>"}
-        # REDIRECT RESPONSE: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "redirect", "MID": "<a unique string>"}
         # If key does not exist return empty OK message for value of key
-        pass
+        self.send_fail(msg['src'], msg['MID'])
 
     # Handle PUT type messages        
     def handle_put(self, msg):
         # FORMAT: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "put", "MID": "<a unique string>", "key": "<some key>", "value": "<value of the key>"}
         # OK RESPONSE: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "ok", "MID": "<a unique string>"}
-        # FAIL RESPONSE: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "fail", "MID": "<a unique string>"}
-        # REDIRECT RESPONSE: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "redirect", "MID": "<a unique string>"}
-        pass
+        self.send_fail(msg['src'], msg['MID'])
+       
+    # Sends a FAIL type message to given dest
+    def send_fail(self, dest, message_id):
+        # TODO: Leader field
+        fail_msg = {'src': self.id, 'dst': dest, 'leader': 'FFFF', 'type': 'fail', 'MID': message_id}
+        self.socket.send(json.dumps(fail_msg))
+        
+    # Sends a REDIRECT type message to given dest
+    def send_redirect(self, dest, message_id):
+        # TODO: Leader field
+        redirect_msg = {'src': self.id, 'dst': dest, 'leader': 'FFFF', 'type': 'redirect', 'MID': message_id}
+        self.socket.send(json.dumps(redirect_msg))
      
 # main function
 if __name__ == '__main__':
