@@ -54,7 +54,7 @@ class Raft(object):
         # Loop and listen for messages
         while True:
             # Wait for socket to be ready
-            ready = select.select([self.socket], [], [], 0.1)[0]
+            ready = select.select([self.socket], [], [], 0.05)[0]
             if self.socket in ready:
                 # Obtain the raw message from the socket
                 msg_raw = self.socket.recv(32768)
@@ -127,7 +127,7 @@ class Raft(object):
             vote = True
             # Remember that we voted for this replica
             self.voted_for = msg['src']
-            
+
         # Send a vote message back to sender
         vote_msg = {'src': self.id, 'dst': msg['src'], 'leader': self.leader,
                     'type': 'vote', 'vote': vote}
