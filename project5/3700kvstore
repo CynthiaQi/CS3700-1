@@ -87,9 +87,8 @@ class Raft(object):
         while self.commit_index > self.last_applied:
             self.last_applied += 1
             toApply = self.log[self.last_applied]
-            # self.printlog('Commit {} applied, key: {}, value: {}'.format(self.last_applied, toApply['key'], toApply['value']))
             self.state[toApply['key']] = toApply['value']
-            if toApply['src'] is not None and toApply['mid'] is not None:
+            if self.leader == self.id:
                 self.send_ok(toApply['src'], toApply['mid'])
 
     # commit entries with quorum support
@@ -102,7 +101,6 @@ class Raft(object):
                     confirms += 1
             if confirms > (len(self.replica_ids) + 1) / 2:
                 if self.log[new_commit_index]['term'] == self.current_term:
-                    # self.printlog("Commiting {} with {} confirms".format(new_commit_index, confirms))
                     self.commit_index = new_commit_index
                 new_commit_index += 1
             else:
@@ -114,20 +112,14 @@ class Raft(object):
         for follower, next_index in self.next_index.iteritems():
             if (last_log_index >= next_index and
                     (self.rpc[follower][1] is None or
-                        ((time.time() - self.rpc[follower][1]) > 0.05))):
+                        ((time.time() - self.rpc[follower][1]) > 0.01))):
                 self.send_append_entries(follower)
 
 
     # send append entries message to a replica
     def send_append_entries(self, follower):
         prevLogIndex = self.next_index[follower] - 1
-        entries = [{
-            'term': e['term'],
-            'key': e['key'],
-            'value': e['value'],
-            'src': None,
-            'mid': None
-            } for e in self.log[prevLogIndex + 1:prevLogIndex + 21]]
+        entries = self.log[prevLogIndex + 1:prevLogIndex + 50]
         prevLogTerm = self.log[prevLogIndex]['term']
         msg = { 'src': self.id,
                 'dst': follower,
@@ -247,8 +239,16 @@ class Raft(object):
             # Message term >= our current term
             # We haven't voted or already voted for this candidate
             # Logs are up to date
-            # TODO: Use the lastLogTerm field in this check
-        if (self.voted_for is None or self.voted_for == msg['src']) and msg['lastLogIndex'] >= len(self.log)-1:
+        not_already_voted = self.voted_for is None or self.voted_for == msg['src']
+        lastLogIndex = len(self.log) - 1
+        lastLogTerm = self.log[lastLogIndex]['term'] if lastLogIndex >= 0 else None
+        log_up_to_date = False
+        if msg['lastLogTerm'] > lastLogTerm:
+            log_up_to_date = True
+        elif msg['lastLogTerm'] == lastLogTerm:
+            if msg['lastLogIndex'] >= lastLogIndex:
+                log_up_to_date = True
+        if not_already_voted and log_up_to_date:
             vote = True
             # Remember that we voted for this replica
             self.voted_for = msg['src']
@@ -325,7 +325,6 @@ class Raft(object):
     # Send heartbeats
     def send_heartbeat(self):
         # Send a heartbeat message
-        # TODO: prevLogTerm and prevLogIndex fields
         heartbeat_msg = {'src': self.id, 'dst': 'FFFF', 'leader': self.leader,
                          'type': 'appendEntries', 'term': self.current_term,
                          'entries': [], 'leaderCommit': self.commit_index,
@@ -337,7 +336,6 @@ class Raft(object):
 
     # Called to invoke election process and request votes
     def send_request_vote(self):
-        # Begin the election if the election_timeout has passed without a heartbeat
         # Reset from previous election
         self.leader = 'FFFF'
         self.votes = dict()
@@ -349,10 +347,11 @@ class Raft(object):
         # Reset election timer
         self.election_timer = time.time()
         # Send RequestVote RPCs to all replicas
-        # TODO: Last log term field
+        lastLogIndex = len(self.log) - 1
+        lastLogTerm = self.log[-1]['term'] if lastLogIndex >= 0 else None
         request_vote_msg = {'src': self.id, 'dst': 'FFFF', 'leader': self.leader,
                             'type': 'requestVote', 'term': self.current_term,
-                            'lastLogIndex': len(self.log)-1, 'lastLogTerm': 'TODO'}
+                            'lastLogIndex': lastLogIndex, 'lastLogTerm': lastLogTerm}
         self.socket.send(json.dumps(request_vote_msg))
         self.printlog("Beginning election " + str(self.current_term))
 
@@ -364,7 +363,7 @@ class Raft(object):
         self.socket.send(json.dumps(fail_msg))
 
     def send_ok(self, dest , mid, val = None):
-        self.printlog('OK-{} {} {} {}'.format('GET' if val is None else 'PUT',
+        self.printlog('OK-{} {} {} {}'.format('PUT' if val is None else 'GET',
             dest, mid, val))
         ok_msg = {'src': self.id, 'dst': dest, 'leader': self.leader, 'type': 'ok', 'MID': mid}
         if val is not None:
