@@ -90,15 +90,17 @@ class Raft(object):
             self.state[toApply['key']] = toApply['value']
             if self.leader == self.id:
                 self.send_ok(toApply['src'], toApply['mid'])
+            self.printlog("applied commit: {}".format(toApply['mid']))
 
     # commit entries with quorum support
     def update_commit_index(self):
         new_commit_index = self.commit_index + 1
         while new_commit_index < len(self.log):
-            confirms = 0
+            confirms = 1 # at least we confirm it's valid
             for f, idx in self.match_index.iteritems():
                 if idx >= new_commit_index:
                     confirms += 1
+            self.printlog("{} commits for log_idx {}".format(confirms, new_commit_index))
             if confirms > (len(self.replica_ids) + 1) / 2:
                 if self.log[new_commit_index]['term'] == self.current_term:
                     self.commit_index = new_commit_index
@@ -197,9 +199,9 @@ class Raft(object):
                     redundantEntries += 1
                 else:
                     break;
-            for entry in self.log[lastValid + 1:]:
-                if entry['src'] is not None and entry['mid'] is not None:
-                    self.send_fail(entry['src'], entry['mid'])
+            # for entry in self.log[lastValid + 1:]:
+            #     if entry['src'] is not None and entry['mid'] is not None:
+            #         self.send_fail(entry['src'], entry['mid'])
             self.log = self.log[:lastValid + 1]
             # append any new entries
             for e in msg['entries'][redundantEntries:]:
@@ -291,7 +293,7 @@ class Raft(object):
 
     # Handle GET type messages
     def handle_get(self, msg):
-        self.printlog('GET {} {}'.format(msg['key'], msg['MID']))
+        # self.printlog('GET {} {}'.format(msg['key'], msg['MID']))
         # FORMAT: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "get", "MID": "<a unique string>", "key": "<some key>"}
         # OK RESPONSE: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "ok", "MID": "<a unique string>", "value": "<value of the key>"}
         # If key does not exist return empty OK message for value of key
@@ -307,7 +309,7 @@ class Raft(object):
 
     # Handle PUT type messages
     def handle_put(self, msg):
-        self.printlog('PUT {} {} {}'.format(msg['key'], msg['value'], msg['MID']))
+        self.printlog('PUT {}'.format(msg['MID']))
         # FORMAT: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "put", "MID": "<a unique string>", "key": "<some key>", "value": "<value of the key>"}
         # OK RESPONSE: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "ok", "MID": "<a unique string>"}
         # If we are not the leader, send a redirect message
@@ -358,13 +360,12 @@ class Raft(object):
 
     # Sends a FAIL type message to given dest
     def send_fail(self, dest, message_id):
-        self.printlog("FAIL {} {}".format(dest, message_id))
+        # self.printlog("FAIL {} {}".format(dest, message_id))
         fail_msg = {'src': self.id, 'dst': dest, 'leader': self.leader, 'type': 'fail', 'MID': message_id}
         self.socket.send(json.dumps(fail_msg))
 
     def send_ok(self, dest , mid, val = None):
-        self.printlog('OK-{} {} {} {}'.format('PUT' if val is None else 'GET',
-            dest, mid, val))
+        # self.printlog('OK-{} {} {} {}'.format('PUT' if val is None else 'GET', dest, mid, val))
         ok_msg = {'src': self.id, 'dst': dest, 'leader': self.leader, 'type': 'ok', 'MID': mid}
         if val is not None:
             ok_msg['value'] = val
@@ -380,7 +381,7 @@ class Raft(object):
     # Simple logging method
     def printlog(self, log_message):
         self.logfile.write("[" + self.id + "]: " + log_message + "\n")
-        pass
+        self.logfile.flush()
 
 
 # main function
@@ -390,6 +391,6 @@ if __name__ == '__main__':
     # The ID numbers of all the other replicas
     replica_ids = sys.argv[2:]
     # Start the program
-    with open('log', 'w') as logfile:
+    with open('log{}'.format(my_id), 'w') as logfile:
         raft = Raft(my_id, replica_ids, logfile)
         raft.receive()
