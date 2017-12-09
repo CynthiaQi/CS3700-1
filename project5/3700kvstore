@@ -54,6 +54,13 @@ class Raft(object):
         self.socket.connect(self.id)
 
 
+    # When the leader changes, make sure queued messages get processed
+    def process_pre_election_queue(self):
+        for message in self.pre_election_queue:
+            self.handle_message(message)
+        self.pre_election_queue = list()
+
+
     # Event loop for receiving messages on the socket
     def receive(self):
         # Start timers
@@ -84,6 +91,7 @@ class Raft(object):
                 self.update_commit_index()
             self.apply_commits()
 
+
     # apply any log entries which are confirmed by the leader
     def apply_commits(self):
         while self.commit_index > self.last_applied:
@@ -93,6 +101,7 @@ class Raft(object):
             if self.leader == self.id:
                 self.send_ok(toApply['src'], toApply['mid'])
             self.printlog("applied commit: {}".format(toApply['mid']))
+
 
     # commit entries with quorum support
     def update_commit_index(self):
@@ -108,7 +117,8 @@ class Raft(object):
                     self.commit_index = new_commit_index
                 new_commit_index += 1
             else:
-                break;
+                break
+
 
     # send appendEntries to followers where necessary
     def update_followers(self):
@@ -137,7 +147,6 @@ class Raft(object):
             }
         self.rpc[follower] = (len(entries), time.time())
         self.socket.send(json.dumps(msg))
-
 
 
     # Handles when the event loop recieves a message on the socket
@@ -176,9 +185,7 @@ class Raft(object):
             self.current_term = msg['term']
             self.leader = msg['leader']
             # Process the pre_election_queue now that we know a leader
-            for message in self.pre_election_queue:
-                self.handle_message(message)
-            self.pre_election_queue = list()
+            self.process_pre_election_queue()
         if len(msg['entries']) == 0:
             return
         # Handle normal append entries RPC
@@ -236,6 +243,7 @@ class Raft(object):
                 else:
                     self.next_index[msg['src']] -= 1
 
+
     # Handle REQUEST_VOTE type messages
     def handle_request_vote(self, msg):
         # Default to False vote
@@ -289,10 +297,9 @@ class Raft(object):
                 self.initialize_leader_state()
                 self.printlog("Election won with " + str(vote_count) + " votes for ID " + self.leader)
                 self.send_heartbeat()
-                # Process pre election queue now that we are leader
-                for message in self.pre_election_queue:
-                    self.handle_message(message)
-                self.pre_election_queue = list()
+                # Process pre_election_queue now that we are leader
+                self.process_pre_election_queue()
+
 
     # initialize leader specific state
     def initialize_leader_state(self):
@@ -373,6 +380,7 @@ class Raft(object):
         # self.printlog("FAIL {} {}".format(dest, message_id))
         fail_msg = {'src': self.id, 'dst': dest, 'leader': self.leader, 'type': 'fail', 'MID': message_id}
         self.socket.send(json.dumps(fail_msg))
+
 
     def send_ok(self, dest , mid, val = None):
         # self.printlog('OK-{} {} {} {}'.format('PUT' if val is None else 'GET', dest, mid, val))
