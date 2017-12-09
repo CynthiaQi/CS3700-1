@@ -25,6 +25,8 @@ class Raft(object):
         self.current_term = 0
         # id of candidate voted for in the current term
         self.voted_for = None
+        # list of messages received when leader was unknown
+        self.pre_election_queue = list()
 
         # the log entries
         self.log = []
@@ -142,10 +144,12 @@ class Raft(object):
     def handle_message(self, msg_raw):
         try:
             msg = json.loads(msg_raw)
-            #print('%s received a %s from %s' % (msg['dst'], msg['type'], msg['src']))
 
+            # No leader, save the get or put msg to pre_election_queue for later processing
+            if self.leader == 'FFFF' and (msg['type'] == 'get' or msg['type'] == 'put'):
+                self.pre_election_queue.append(msg_raw)
             # Handle each message type
-            if msg['type'] == 'get':
+            elif msg['type'] == 'get':
                 self.handle_get(msg)
             elif msg['type'] == 'put':
                 self.handle_put(msg)
@@ -171,6 +175,10 @@ class Raft(object):
             # Update the current term and leader
             self.current_term = msg['term']
             self.leader = msg['leader']
+            # Process the pre_election_queue now that we know a leader
+            for message in self.pre_election_queue:
+                self.handle_message(message)
+            self.pre_election_queue = list()
         if len(msg['entries']) == 0:
             return
         # Handle normal append entries RPC
@@ -281,6 +289,10 @@ class Raft(object):
                 self.initialize_leader_state()
                 self.printlog("Election won with " + str(vote_count) + " votes for ID " + self.leader)
                 self.send_heartbeat()
+                # Process pre election queue now that we are leader
+                for message in self.pre_election_queue:
+                    self.handle_message(message)
+                self.pre_election_queue = list()
 
     # initialize leader specific state
     def initialize_leader_state(self):
@@ -295,25 +307,23 @@ class Raft(object):
     def handle_get(self, msg):
         # self.printlog('GET {} {}'.format(msg['key'], msg['MID']))
         # FORMAT: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "get", "MID": "<a unique string>", "key": "<some key>"}
-        # OK RESPONSE: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "ok", "MID": "<a unique string>", "value": "<value of the key>"}
-        # If key does not exist return empty OK message for value of key
-        # If we are not the leader, send a redirect message
         if self.leader != self.id:
+            # If we are not the leader, send a redirect message
             self.send_redirect(msg['src'], msg['MID'])
         else:
             if msg['key'] in self.state:
                 self.send_ok(msg['src'], msg['MID'], self.state[msg['key']])
             else:
-                self.send_fail(msg['src'], msg['MID'])
+                # If key does not exist return empty OK message for value of key
+                self.send_ok(msg['src'], msg['MID'], '')
 
 
     # Handle PUT type messages
     def handle_put(self, msg):
         self.printlog('PUT {}'.format(msg['MID']))
         # FORMAT: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "put", "MID": "<a unique string>", "key": "<some key>", "value": "<value of the key>"}
-        # OK RESPONSE: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "ok", "MID": "<a unique string>"}
-        # If we are not the leader, send a redirect message
         if self.leader != self.id:
+            # If we are not the leader, send a redirect message
             self.send_redirect(msg['src'], msg['MID'])
         else:
             self.log.append({
