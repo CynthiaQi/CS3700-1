@@ -12,11 +12,11 @@ class Raft(object):
         # Election timer
         self.election_timer = None
         # Randomly chosen election timeout
-        self.election_timeout = random.uniform(.5, 1.0)
+        self.election_timeout = random.uniform(.15, .3)
         # Heartbeat timer
         self.heartbeat_timer = None
         # Interval to send heartbeats is half of minimum election_timeout
-        self.heartbeat_interval = .5 / 2
+        self.heartbeat_interval = .075
         # Maps replica ids to their vote
         self.votes = dict()
         # Current leader
@@ -33,9 +33,9 @@ class Raft(object):
         # the state machine
         self.state = {}
         # highest log entry index commited
-        self.commit_index = 0
+        self.commit_index = -1
         # highest log entry index applied to state machine
-        self.last_applied = 0
+        self.last_applied = -1
 
         # leader only state
         # map of server id to next log entry to send to that server
@@ -78,14 +78,14 @@ class Raft(object):
                 if len(msg_raw) != 0:
                     self.handle_message(msg_raw)
 
-                if self.leader == self.id:
-                    # If we are leader, send a heartbeat every heartbeat_interval
-                    if (time.time() - self.heartbeat_timer) > self.heartbeat_interval:
-                        self.send_heartbeat()
-                else:
-                    # If election timeout has passed and we are not leader, begin election process
-                    if (time.time() - self.election_timer) > self.election_timeout:
-                        self.send_request_vote()
+            if self.leader == self.id:
+                # If we are leader, send a heartbeat every heartbeat_interval
+                if (time.time() - self.heartbeat_timer) > self.heartbeat_interval:
+                    self.send_heartbeat()
+            else:
+                # If election timeout has passed and we are not leader, begin election process
+                if (time.time() - self.election_timer) > self.election_timeout:
+                    self.send_request_vote()
             if self.leader == self.id:
                 self.update_followers()
                 self.update_commit_index()
@@ -126,7 +126,7 @@ class Raft(object):
         for follower, next_index in self.next_index.iteritems():
             if (last_log_index >= next_index and
                     (self.rpc[follower][1] is None or
-                        ((time.time() - self.rpc[follower][1]) > 0.01))):
+                        ((time.time() - self.rpc[follower][1]) > 0.03))):
                 self.send_append_entries(follower)
 
 
@@ -305,14 +305,14 @@ class Raft(object):
     def initialize_leader_state(self):
         for follower in self.replica_ids:
             self.next_index[follower] = len(self.log)
-            self.match_index[follower] = 0
+            self.match_index[follower] = -1
             self.rpc[follower] = (0, None)
 
 
 
     # Handle GET type messages
     def handle_get(self, msg):
-        # self.printlog('GET {} {}'.format(msg['key'], msg['MID']))
+        self.printlog('GET {} {}'.format(msg['key'], msg['MID']))
         # FORMAT: {"src": "<ID>", "dst": "<ID>", "leader": "<ID>", "type": "get", "MID": "<a unique string>", "key": "<some key>"}
         if self.leader != self.id:
             # If we are not the leader, send a redirect message
