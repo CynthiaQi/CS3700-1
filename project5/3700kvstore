@@ -8,15 +8,18 @@ class Raft(object):
         self.replica_ids = replica_ids
         self.logfile = logfile
         self.init_socket()
+        
+        # Low end of election timeout, determines other timeout values
+        self.base_timeout = .15
 
         # Election timer
         self.election_timer = None
         # Randomly chosen election timeout
-        self.election_timeout = random.uniform(.5, 1.0)
+        self.election_timeout = random.uniform(self.base_timeout, self.base_timeout * 2.0)
         # Heartbeat timer
         self.heartbeat_timer = None
         # Interval to send heartbeats is half of minimum election_timeout
-        self.heartbeat_interval = .5 / 2
+        self.heartbeat_interval = self.base_timeout / 2.0
         # Maps replica ids to their vote
         self.votes = dict()
         # Current leader
@@ -213,7 +216,7 @@ class Raft(object):
                     lastValid += 1
                     redundantEntries += 1
                 else:
-                    break;
+                    break
             # for entry in self.log[lastValid + 1:]:
             #     if entry['src'] is not None and entry['mid'] is not None:
             #         self.send_fail(entry['src'], entry['mid'])
@@ -273,7 +276,7 @@ class Raft(object):
 
         # Send a vote message back to sender
         vote_msg = {'src': self.id, 'dst': msg['src'], 'leader': self.leader,
-                    'type': 'vote', 'vote': vote}
+                    'type': 'vote', 'vote': vote, 'term': self.current_term}
         self.socket.send(json.dumps(vote_msg))
         # Reset election timer
         self.election_timer = time.time()
@@ -281,8 +284,12 @@ class Raft(object):
 
     # Handle VOTE type messages
     def handle_vote(self, msg):
-        # Ignore votes if we are already leader
-        if self.leader != self.id:
+        # If current_term is lower than the response term, update our current_term
+        if self.current_term < msg['term']:
+            self.current_term = msg['term']
+            self.reset_election()
+        # Ignore votes if we are already leader or if term doesn't match
+        if self.leader != self.id and self.current_term == msg['term'] and self.voted_for == self.id:
             # Record the vote
             self.votes[msg['src']] = msg['vote']
             # Determine if we have majority vote
@@ -353,11 +360,17 @@ class Raft(object):
         self.heartbeat_timer = time.time()
 
 
+    # Reset before starting a new election
+    def reset_election(self):
+        self.leader = 'FFFF'
+        self.votes = dict()
+        self.voted_for = None
+
+
     # Called to invoke election process and request votes
     def send_request_vote(self):
         # Reset from previous election
-        self.leader = 'FFFF'
-        self.votes = dict()
+        self.reset_election()
         # Increment current_term
         self.current_term += 1
         self.voted_for = self.id
@@ -398,7 +411,7 @@ class Raft(object):
 
     # Simple logging method
     def printlog(self, log_message):
-        self.logfile.write("[" + self.id + "]: " + log_message + "\n")
+        self.logfile.write("[" + self.id + "][" + self.leader + "]: " + log_message + "\n")
         self.logfile.flush()
 
 
