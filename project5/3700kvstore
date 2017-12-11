@@ -3,10 +3,9 @@ import sys, socket, select, time, json, random
 
 
 class Raft(object):
-    def __init__(self, my_id, replica_ids, logfile):
+    def __init__(self, my_id, replica_ids):
         self.id = my_id
         self.replica_ids = replica_ids
-        self.logfile = logfile
         self.init_socket()
 
         # Low end of election timeout, determines other timeout values
@@ -412,8 +411,9 @@ class Raft(object):
 
     # Simple logging method
     def printlog(self, log_message):
-        self.logfile.write("[" + self.id + "][" + self.leader + "]: " + log_message + "\n")
-        self.logfile.flush()
+        # self.logfile.write("[" + self.id + "][" + self.leader + "]: " + log_message + "\n")
+        # self.logfile.flush()
+        pass
 
 
 # main function
@@ -423,6 +423,5 @@ if __name__ == '__main__':
     # The ID numbers of all the other replicas
     replica_ids = sys.argv[2:]
     # Start the program
-    with open('log{}'.format(my_id), 'w') as logfile:
-        raft = Raft(my_id, replica_ids, logfile)
-        raft.receive()
+    raft = Raft(my_id, replica_ids)
+    raft.receive()
